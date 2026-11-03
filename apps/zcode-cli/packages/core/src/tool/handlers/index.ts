@@ -52,7 +52,7 @@ import {
   exitPlanModeToolEntry,
 } from "./plan-mode.js";
 import { askUserQuestionToolEntry } from "./ask-user-question.js";
-import { sendMessageToolEntry } from "./send-message.js";
+import { createSendMessageToolEntry, sendMessageToolEntry } from "./send-message.js";
 import { respondToCoordinatorToolEntry } from "./respond-to-coordinator.js";
 import { createSubmitResultToolEntry, submitResultToolEntry } from "./submit-result.js";
 import { escalateToolEntry } from "./escalate.js";
@@ -166,6 +166,7 @@ interface RegisterBuiltInToolsOptions {
   includeSkill?: boolean;
   includeAgent?: boolean;
   includeSendMessage?: boolean;
+  peerMessagesOnly?: boolean;
   includeRespondToCoordinator?: boolean;
   includeSubmitResult?: boolean;
   /**
@@ -277,6 +278,9 @@ function resolveBuiltInToolEntryForBranch(
   entry: ToolEntry,
   options: RegisterBuiltInToolsOptions,
 ): ToolEntry {
+  if (entry.metadata.name === "SendMessage") {
+    return createSendMessageToolEntry({ peerOnly: options.peerMessagesOnly });
+  }
   if (entry.metadata.name === "Bash") {
     return createBashToolEntry({
       bashTimeoutPolicy: options.bashTimeoutPolicy,

@@ -370,3 +370,4 @@ export type {
   BotSaveBotParams,
   BotTestResult,
 } from "./bots/bots.js";
+export { IServerWorkbenchService } from "./server-workbench/contract.js";

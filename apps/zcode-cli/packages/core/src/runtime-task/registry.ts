@@ -27,10 +27,9 @@ export interface RuntimeTaskPendingMessage {
   id: string;
   isMeta?: boolean;
   message: string;
-  origin?: {
-    kind: "coordinator";
-    toolCallId?: string;
-  };
+  origin?:
+    | { kind: "coordinator"; toolCallId?: string }
+    | { kind: "peer"; agentId: string; agentType: string; toolCallId?: string };
   queuedAt: Date;
   summary?: string;
   traceContext?: TraceContext;

@@ -1,3 +1,5 @@
+import { createMainAgentPromptResolver } from "../zcode-protocol-v4/main-agent-prompts.js";
+import { requestSessionRuntimePreferences } from "./server-operations.js";
 import { readBackgroundBashOutputFromOwner } from "./background-work-owner.js";
 import {
   normalizeStoredTitleSource,
@@ -259,6 +261,7 @@ interface InputCommandForAdmission {
   kind: ConversationInputIntent["kind"];
   text: string;
   attachments: readonly AttachmentRef[];
+  mainAgentPrompt?: ConversationInputIntent["mainAgentPrompt"];
   sharedContextRefs?: ConversationInputIntent["sharedContextRefs"];
   requestedDelivery?: ConversationInputIntent["delivery"]["requested"];
   admittedDelivery?: ConversationInputIntent["delivery"]["admitted"];
@@ -363,6 +366,7 @@ function resolveInputCommandForAdmission(
     canonical.intent.provenance?.sourceCommandId ?? canonical.intent.sourceCommandId;
   return {
     kind: canonical.intent.kind,
+    mainAgentPrompt: canonical.intent.mainAgentPrompt ?? null,
     text:
       envelope.type === "editUserQuery"
         ? (payload.newText ?? canonical.intent.text)
@@ -681,7 +685,24 @@ export function createConversationV4Gateway(
     timer.unref?.();
     autoDrainRetryTimers.set(sessionId, timer);
   };
+  const readMainAgentPromptLibrary = async (sessionId: string) => {
+    const preferences = await requestSessionRuntimePreferences(
+      context,
+      sessionId as SessionId,
+      "main-agent-prompts",
+    );
+    return preferences.mainAgentPrompts;
+  };
+  const resolveMainAgentPromptSnapshot = createMainAgentPromptResolver({
+    readLibrary: readMainAgentPromptLibrary,
+    getSelection: (sessionId) =>
+      context.sessions.get(sessionId)?.app.runtime.getMainAgentPromptId(),
+    getAdmittedInput: (id) =>
+      context.deps.sessionStore?.getSessionInputById?.(id) ?? Promise.resolve(null),
+  });
   const coreHost: V4CommandCoreHost = {
+    readMainAgentPromptLibrary,
+    resolveMainAgentPrompt: resolveMainAgentPromptSnapshot,
     // 同一注册表对象引用：view 是旧 record 的结构化窄视图，字段变更双向可见。
     getRecord: (sessionId) => context.sessions.get(sessionId),
     // 同一登记表实例：broker（旧目录）注册反向请求 deferred，
@@ -761,6 +782,10 @@ export function createConversationV4Gateway(
         clientId: envelope.clientId || "cli",
         kind,
         text: input.text ?? "",
+        mainAgentPrompt:
+          input.mainAgentPrompt !== undefined
+            ? input.mainAgentPrompt
+            : await resolveMainAgentPromptSnapshot(sessionId),
         attachments: attachmentRefs,
         ...(input.sharedContextRefs ? { sharedContextRefs: input.sharedContextRefs } : {}),
         delivery: {
@@ -790,6 +815,7 @@ export function createConversationV4Gateway(
             queueItemId: conversationInputIntent.queueItemId,
             clientId: conversationInputIntent.clientId,
             kind: conversationInputIntent.kind,
+            mainAgentPrompt: conversationInputIntent.mainAgentPrompt,
             admissionSeq: admission.admissionSeq,
             admittedAt: admission.admittedAt,
             requestedDelivery: conversationInputIntent.delivery.requested,
@@ -1525,6 +1551,7 @@ export function createConversationV4Gateway(
       const selection =
         record.app.runtime.getSessionModelSelection() ?? record.restoredModelSelection;
       return {
+        mainAgentPromptId: record.app.runtime.getMainAgentPromptId?.() ?? null,
         modelSelection: cloneModelSelection(selection),
         provider: selection?.providerId ?? "",
         model: selection?.modelId ?? "",

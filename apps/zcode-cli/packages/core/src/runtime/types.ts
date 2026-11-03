@@ -235,6 +235,9 @@ export interface AgentRuntimeConfig {
 
   // Context Builder config
   systemPrompt?: string;
+  mainAgentPromptId?: string | null;
+  /** 当前执行轮的固定快照；选择变更不得写此字段。 */
+  mainAgentPrompt?: import("@zcode/shared").MainAgentPromptSnapshot;
   /**
    * 动态工作流子代理的身份输入：在场即让
    * context builder 走「基座 + 工作流子代理契约 + persona 叠加」路径，而不是把 persona 当

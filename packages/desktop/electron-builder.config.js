@@ -612,6 +612,7 @@ export default {
     }
   },
   extraResources: [
+    ...(targetPlatform.os === "win32" ? [{ from: "resources/server-rdp", to: "server-rdp" }] : []),
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
     ...(targetPlatform.os === "darwin"
       ? [
@@ -776,6 +777,9 @@ export default {
   win: {
     target: ["nsis"],
     artifactName: buildDesktopArtifactName("win"),
+    // Windows 本地未签名构建不下载 winCodeSign；该工具包含 macOS 符号链接，
+    // 在未启用开发者模式的 Windows 环境中解压会失败。
+    signAndEditExecutable: false,
   },
   linux: {
     target: ["AppImage", "deb", "rpm", "pacman"],

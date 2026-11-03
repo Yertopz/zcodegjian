@@ -87,6 +87,7 @@ export interface CanonicalUserIntentFact extends CanonicalConversationFactBase {
   fallbackReasonCode?: string;
   modelSelection?: TurnInputIntentMetadata["modelSelection"];
   mode?: TurnInputIntentMetadata["mode"];
+  mainAgentPrompt?: import("@zcode/shared").MainAgentPromptSnapshot;
   planEnabled?: boolean;
   provenance?: {
     sourceCommandId: string;
@@ -280,6 +281,7 @@ function normalizeTurnStarted(
     ...(payload.intent?.fallbackReasonCode
       ? { fallbackReasonCode: payload.intent.fallbackReasonCode }
       : {}),
+    mainAgentPrompt: payload.intent?.mainAgentPrompt ?? null,
     ...(payload.intent?.modelSelection ? { modelSelection: payload.intent.modelSelection } : {}),
     ...(payload.intent?.mode ? { mode: payload.intent.mode } : {}),
     ...(payload.intent?.planEnabled !== undefined

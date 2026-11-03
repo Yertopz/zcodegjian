@@ -23,6 +23,11 @@ import {
   LoggingChannelServer,
 } from "@zcode/rpc";
 import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
+import { createServerWorkbenchService } from "./serverWorkbench/service.js";
+import { createServerDesktopBridge } from "./serverWorkbench/desktopBridge.js";
+import { IServerWorkbenchService } from "@zcode/services";
+import { getAppConfigDir } from "@zcode/services/node";
+import { join as joinServerPath } from "node:path";
 import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
 import {
   ServiceCollection,
@@ -176,6 +181,11 @@ type RemoteAssetDirs = Pick<
 >;
 
 const { parentPort } = process;
+const serverDesktopBridge = createServerDesktopBridge((message) => {
+  if (!parentPort) throw new Error("Desktop Main 不可用");
+  parentPort.postMessage(message);
+});
+let serverWorkbench: ReturnType<typeof createServerWorkbenchService> | undefined;
 
 // 进程检索体验优化：host 由 utilityProcess 拉起时外壳仍是 Electron Helper，
 // 这里根据 main 传入的窗口 label 补一层稳定的 zcode-* title，方便系统进程列表过滤。
@@ -2085,6 +2095,7 @@ function disposeAttachedServicePorts(): void {
 }
 
 async function disposeHostResources(reason: string): Promise<HostShutdownResult> {
+  serverWorkbench?.dispose();
   databaseStartup?.dispose();
   pendingStartupAttachments.clear();
   if (hasDisposedHostResources) {
@@ -2392,6 +2403,10 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
       requestId: msg.requestId,
       result: msg.result,
     });
+    return;
+  }
+  if (msg.type === HostMessageTypes.ServerDesktopResult) {
+    serverDesktopBridge.result(msg.requestId, msg.result);
     return;
   }
 
@@ -2826,6 +2841,45 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               cuaOperationStateReporter:
                 process.platform === "win32" ? cuaOperationStateReporter : undefined,
             });
+            serverWorkbench = createServerWorkbenchService({
+              storePath: joinServerPath(getAppConfigDir(), "servers.json"),
+              desktopAvailable: process.platform === "win32",
+              desktop: (request) => serverDesktopBridge.execute(request),
+              generate: async (prompt, signal, image) => {
+                const view = await initializedServices.get(IModelSelectionService).getView();
+                const selection = view.preferredSelection ?? view.effectiveSelection;
+                if (!selection) throw new Error("请先在设置中配置可用模型");
+                const result = await initializedServices
+                  .get(IZCodeAgentService)
+                  .generateWorkspaceText({
+                    workspacePath: getAppConfigDir(),
+                    selection,
+                    ...(image
+                      ? {
+                          messages: [
+                            {
+                              role: "user" as const,
+                              content: [
+                                { type: "text" as const, text: prompt },
+                                {
+                                  type: "image" as const,
+                                  mediaType: "image/png" as const,
+                                  dataUrl: image,
+                                },
+                              ],
+                            },
+                          ],
+                        }
+                      : { prompt }),
+                    tools: [],
+                    querySource: "server-workbench",
+                    maxOutputTokens: 3000,
+                    signal,
+                  });
+                return result.text;
+              },
+            });
+            initializedServices.register(IServerWorkbenchService, serverWorkbench);
             activeServices = initializedServices;
             activeHostApiNetworkTransport = hostApiNetworkTransport;
             return initializedServices;

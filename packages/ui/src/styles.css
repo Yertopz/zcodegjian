@@ -112,29 +112,37 @@ body {
   overflow: hidden;
 }
 
-/*
- *  部分浏览器 / Electron 运行环境会在 focus-visible 时叠加系统级高亮边框，
- * 表现为和产品主题无关的黄色描边，看起来像“随机冒出来的无障碍样式”。
- * 这里在全局层同时清掉 outline 和 focus ring 对应的 box-shadow，避免系统高亮和组件局部 ring 混用。
- */
-*:focus,
-*:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  -webkit-box-shadow: none !important;
+/* 键盘操作需要可见焦点；聊天编辑区由外层中性边框和输入底色提示焦点，不画蓝色描边。 */
+:where(
+  button,
+  a[href],
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="menuitem"],
+  [role="option"],
+  [role="tab"],
+  [role="switch"]
+):focus-visible {
+  outline: 2px solid var(--color-terminal-bright-blue);
+  outline-offset: -2px;
 }
 
 @media (forced-colors: active) {
-  *:focus,
-  *:focus-visible {
-    outline: none !important;
-    box-shadow: none !important;
+  :where(button, a[href], input, textarea, select, [role]):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
   }
 }
 
 /* === 主题变量 === */
 
 @theme {
+  /* 系统字体优先，并为 Windows 与 Linux 上的中文提供无衬线回退。 */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Microsoft YaHei UI",
+    "PingFang SC", "Noto Sans CJK SC", sans-serif;
   /* Windows 的 Consolas 不含中文字形，Tailwind 默认栈最终会让中文落到宋体。
    * 保留各平台西文等宽字体，并在通用 monospace 前显式加入各平台 CJK 无衬线字体。 */
   --font-mono:
@@ -461,8 +469,8 @@ body {
 .theme-zai-light {
   --animated-gradient-text-strong: rgba(13, 13, 13, 1);
   --animated-gradient-text-soft: rgba(13, 13, 13, 0.22);
-  --color-background: #f8f8f8;
-  --color-background-win-alt: #ececee;
+  --color-background: #f9f9fb;
+  --color-background-win-alt: #e9e9ed;
   --color-background-alt: color-mix(in oklab, var(--color-background) 70%, transparent);
   --color-brand: #000000;
   --color-trajectory-user: #2563eb;
@@ -480,9 +488,9 @@ body {
   --color-border-hover: rgba(13, 13, 13, 0.15);
   --color-hover: rgba(13, 13, 13, 0.05);
   --color-selected: rgba(13, 13, 13, 0.05);
-  --color-header: #ffffff;
+  --color-header: #fafafc;
   --color-panel: #ffffff;
-  --color-sidebar: #f0f0f0;
+  --color-sidebar: #f0f0f3;
   --color-surface: rgba(13, 13, 13, 0.03);
   --color-surface-hover: rgba(13, 13, 13, 0.05);
   --color-card: #ffffff;
@@ -490,13 +498,13 @@ body {
   --color-card-border: var(--color-border);
   --color-popover: #ffffff;
   --color-popover-foreground: var(--color-foreground);
-  --color-popover-header: #f8f8f8;
+  --color-popover-header: #f9f9fb;
   --color-popover-border: var(--color-border);
   --color-input: #ffffff;
   --color-input-focused: var(--color-input);
   --color-input-border: var(--color-border);
   --color-input-border-hover: var(--color-border-hover);
-  --color-input-border-focused: var(--color-border-hover);
+  --color-input-border-focused: rgba(13, 13, 13, 0.3);
   --color-terminal-bg: var(--color-background);
   --color-terminal-fg: var(--color-foreground);
   --color-terminal-cursor: #0d0d0d;
@@ -537,11 +545,11 @@ body {
   --color-usage-heatmap-2: color-mix(in oklab, #0b7fff 36%, var(--color-surface));
   --color-usage-heatmap-3: color-mix(in oklab, #0b7fff 58%, var(--color-surface));
   --color-usage-heatmap-4: color-mix(in oklab, #0066dd 82%, var(--color-surface));
-  --color-tab: #f0f0f0;
+  --color-tab: #f0f0f3;
   --color-tab-active: #ffffff;
   --color-tab-border: var(--color-border);
   --color-menu: #ffffff;
-  --color-menu-hover: #f0f0f0;
+  --color-menu-hover: #f0f0f3;
   --color-primary: #000000;
   --color-primary-foreground: #ffffff;
   --color-secondary: #e6e6e6;
@@ -552,7 +560,7 @@ body {
   --color-interaction-confirmation-foreground: #166b32;
   --color-foreground: var(--color-neutral-800);
   --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-800) 60%, transparent);
-  --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-800) 40%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-800) 65%, transparent);
   --color-foreground-inverse: #ffffff;
   --color-success: #1e8a3e;
   --color-success-foreground: #ffffff;
@@ -606,8 +614,8 @@ body {
 .theme-zai-dark {
   --animated-gradient-text-strong: rgba(255, 255, 255, 1);
   --animated-gradient-text-soft: rgba(255, 255, 255, 0.22);
-  --color-background: #161616;
-  --color-background-win-alt: #2b2b2b;
+  --color-background: #171719;
+  --color-background-win-alt: #2b2b2e;
   --color-background-alt: color-mix(in oklab, var(--color-background-win-alt) 60%, transparent);
   --color-brand: #ffffff;
   --color-trajectory-user: #60a5fa;
@@ -625,27 +633,27 @@ body {
   --color-border-hover: rgba(255, 255, 255, 0.15);
   --color-hover: rgba(255, 255, 255, 0.05);
   --color-selected: rgba(255, 255, 255, 0.1);
-  --color-header: #202020;
-  --color-panel: #202020;
-  --color-sidebar: #161616;
+  --color-header: #202023;
+  --color-panel: #202023;
+  --color-sidebar: #171719;
   --color-surface: rgba(255, 255, 255, 0.05);
   --color-surface-hover: rgba(255, 255, 255, 0.1);
-  --color-card: #2b2b2b;
+  --color-card: #2b2b2e;
   --color-card-selected: var(--color-input);
   --color-card-border: var(--color-border);
-  --color-popover: #2b2b2b;
+  --color-popover: #2b2b2e;
   --color-popover-foreground: var(--color-foreground);
-  --color-popover-header: #202020;
+  --color-popover-header: #202023;
   --color-popover-border: var(--color-border);
-  --color-input: #2b2b2b;
+  --color-input: #2b2b2e;
   --color-input-focused: var(--color-input);
   --color-input-border: var(--color-border);
   --color-input-border-hover: var(--color-border-hover);
-  --color-input-border-focused: var(--color-border-hover);
+  --color-input-border-focused: rgba(255, 255, 255, 0.3);
   --color-terminal-bg: var(--color-background);
   --color-terminal-fg: var(--color-foreground);
   --color-terminal-cursor: #f8f8f8;
-  --color-terminal-cursor-accent: #161616;
+  --color-terminal-cursor-accent: var(--color-background);
   --color-terminal-selection: rgba(64, 153, 255, 0.28);
   --color-terminal-selection-inactive: rgba(255, 255, 255, 0.1);
   --color-terminal-black: #363636;
@@ -682,10 +690,10 @@ body {
   --color-usage-heatmap-2: color-mix(in oklab, #4099ff 42%, var(--color-surface));
   --color-usage-heatmap-3: color-mix(in oklab, #4099ff 62%, var(--color-surface));
   --color-usage-heatmap-4: color-mix(in oklab, #80beff 78%, var(--color-surface));
-  --color-tab: #202020;
-  --color-tab-active: #161616;
+  --color-tab: #202023;
+  --color-tab-active: #171719;
   --color-tab-border: var(--color-border);
-  --color-menu: #2b2b2b;
+  --color-menu: #2b2b2e;
   --color-menu-hover: #363636;
   --color-primary: #ffffff;
   --color-primary-foreground: #000000;
@@ -697,7 +705,7 @@ body {
   --color-interaction-confirmation-foreground: #87d9a4;
   --color-foreground: var(--color-neutral-300);
   --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-300) 60%, transparent);
-  --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-300) 30%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-300) 60%, transparent);
   --color-foreground-inverse: #000000;
   --color-success: #46bf72;
   --color-success-foreground: #000000;

@@ -46,6 +46,7 @@ import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/cap
 import { getSessionShellEnvironment } from "./session-shell-environment.js";
 import { deriveChildClientPorts } from "../helpers/child-client-ports.js";
 import { createCoordinatorResponsePort } from "../../subagent/coordinator-response.js";
+import { createPeerMessageBudget, createPeerSubagentPort } from "../../subagent/peer-message.js";
 import { isStaleBranchRuntimeTaskEvent } from "./runtime-command-generation.js";
 import { loadPersistentAgentMemory } from "../../subagent/persistent-memory.js";
 import {
@@ -64,6 +65,7 @@ export function createDefaultSubagentPort(
     return undefined;
   }
 
+  const peerMessageBudget = createPeerMessageBudget();
   return createExploreSubagentPort({
     logger: this.logger,
     inactivityTimeoutMs: this.config.subagents?.inactivityTimeoutMs,
@@ -306,6 +308,15 @@ export function createDefaultSubagentPort(
           // 桌面 UI 只认识父 task 的 sessionId。派生收敛在 deriveChildClientPorts 一处，
           // dwf actor 与 legacy workflow child 走同一条。
           ...childClientPorts,
+          subagentPort: createPeerSubagentPort({
+            registry: this.runtimeTaskRegistry,
+            parentSessionId: this.sessionId,
+            senderAgentId: request.agentId,
+            senderSessionId: request.sessionId,
+            getBranchGeneration: () => this.branchGeneration,
+            isShuttingDown: () => this.shuttingDown,
+            budget: peerMessageBudget,
+          }),
           coordinatorResponsePort: createCoordinatorResponsePort({
             agentId: request.agentId,
             agentType: request.agentType,

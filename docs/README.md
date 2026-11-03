@@ -21,6 +21,11 @@
 | [工作区可见性](development/workspace-registry.md)                        | 可见工作区的真相源、能全看不默认全看、未启动态                |
 | [IM 机器人管理面](development/bot-management-ui.md)                      | 建机器人 / 绑定渠道 / 授权工作区 / 群与话题的管理界面与消费链 |
 | [内置浏览器权限](development/embedded-browser-permissions.md)            | 站点权限 fail-closed、持久同意、弹窗桥与蓝牙守卫              |
+| [浏览器控制台](development/176-browser-console.md)                       | 多实例、代理、网络与页面控制的权限和隔离约束                  |
+| [SSH 服务工作台](development/177-ssh-server-workbench-plan.md)           | SSH/SFTP、RDP 与审批边界                                      |
+| [主提示词设置](development/178-main-agent-prompts.md)                    | 主提示词配置、会话切换和运行时快照                            |
+| [工作区界面视觉约束](development/179-apple-ui-refresh.md)                | 主题、键盘焦点和桌面界面视觉规范                              |
+| [定制升级约束](development/180-custom-upgrade-3163.md)                   | 版本升级后的本地功能、状态所有权和验证要求                    |
 | [图片预览操作](development/preview-image-actions.md)                     | 复制/下载/添加到聊天与右键菜单                                |
 | [侧边面板全视图](development/side-pane-full-view.md)                     | 面板铺满内容区的最小全视图；不含浮动输入窗                    |
 | [插件 UI 沙箱](development/plugin-ui-sandbox.md)                         | MCP App / UI 插件的宿主沙箱：main/renderer/preload 三面边界   |
@@ -40,6 +45,9 @@
 | [办公插件](development/office-plugins.md)                                | 办公三件套的来源标注规范、逐文件归属、上游跟进                |
 | [PDF 插件](development/pdf-plugins.md)                                   | PDF 能力的载荷构成、注册闸门、校验器契约与降级边界            |
 | [模型列表](development/model-list.md)                                    | 内置模型隐藏与从供应商拉取模型列表                            |
+| [协作工作台](development/181-collaboration-workbench.md)                 | 智能体入口、草稿布局及运行时边界                              |
+| [桌面 Renderer 崩溃恢复](development/182-desktop-renderer-crash-recovery.md) | 主窗口 renderer 崩溃后的同窗口恢复与 Host 保留                 |
+| [Desktop Preload 沙箱依赖打包](development/183-desktop-preload-sandbox-bundle.md) | 将 preload 的 npm 依赖内联，避免沙箱启动时找不到模块 |
 | [欠账台账（精简）](development/backlog.md)                               | 长期方向与「有意不做」；全量未完成项在维护者私有工作区        |
 
 ### `community/` — 社区

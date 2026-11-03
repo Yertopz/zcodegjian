@@ -3,6 +3,7 @@ import { databaseStartupControlSchema, databaseStartupStateSchema } from "./data
 import { mcpAppInstanceSchema } from "./mcp-apps/instance.js";
 /* eslint-disable max-lines -- 运行时 schema 当前集中在共享包入口，外部 relay payload 校验加入后先保持单一导出面。 */
 import { z } from "zod";
+import { serverDesktopRequestSchema } from "./server-workbench.js";
 import { zcodeProcessDiagnosticSchema } from "./process-diagnostic.js";
 import { browserCommandSchema } from "./browser-use/commands.js";
 import { browserCommandResultSchema } from "./browser-use/result.js";
@@ -551,6 +552,22 @@ export type HostResourceUsageSnapshotRequestMessage = z.infer<
 
 export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   z
+    .object({
+      type: z.literal("server-desktop-result"),
+      requestId: z.string().min(1),
+      result: z
+        .object({
+          ok: z.boolean(),
+          error: z.string().optional(),
+          image: z.string().max(20_000_000).optional(),
+          available: z.boolean().optional(),
+          state: z.string().max(100).optional(),
+          interactionRevision: z.number().int().nonnegative().optional(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
     .object({ type: z.literal("database-startup-control"), control: databaseStartupControlSchema })
     .strict(),
   hostResourceUsageSnapshotRequestMessageSchema,
@@ -1025,6 +1042,13 @@ export type HostResourceUsageSnapshotResultResponse = z.infer<
 >;
 
 export const hostResponseMessageSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("server-desktop-request"),
+      requestId: z.string().min(1),
+      request: serverDesktopRequestSchema,
+    })
+    .strict(),
   z
     .object({ type: z.literal("database-startup-state"), state: databaseStartupStateSchema })
     .strict(),

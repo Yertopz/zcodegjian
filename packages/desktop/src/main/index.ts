@@ -27,7 +27,7 @@ import {
   registerLocalMediaPreviewScheme,
 } from "./localMediaPreviewProtocol.js";
 import { createDesktopBrowserScreenshotSurfaceCoordinator } from "./browserView/browserScreenshotSurfaceCoordinatorWiring.js";
-import { EMBEDDED_BROWSER_PARTITION } from "./browserDataManager.js";
+import { clearEmbeddedBrowserData, EMBEDDED_BROWSER_PARTITION } from "./browserDataManager.js";
 import { EmbeddedBrowserJavaScriptDialogController } from "./embeddedBrowserJavaScriptDialog.js";
 import {
   browserOperationResetsResizeBaseline,
@@ -203,6 +203,7 @@ import { registerRemoteIpcHandlers } from "./desktopMainIpcRemote.js";
 import { registerRendererHeapSampleIpc } from "./processResourceRendererHeapSource.js";
 import { startMainMemoryDiagnosticsLog } from "./mainMemoryDiagnosticsLog.js";
 import { applyDesktopChromiumNetworkPolicies } from "./desktopNetworkPolicy.js";
+import { initializeBrowserConsoleRuntime } from "./browserConsole/browserConsoleRuntime.js";
 // F9(上游 aac47556):内置浏览器权限治理——策略、弹窗桥与站点权限持久化。
 import { applyEmbeddedBrowserPermissionPolicy } from "./embeddedBrowserPermissionPolicy.js";
 import {
@@ -210,6 +211,21 @@ import {
   setActiveEmbeddedBrowserPermissionUiBridge,
 } from "./embeddedBrowserPermissionUiBridge.js";
 import { createEmbeddedBrowserSitePermissionStore } from "./embeddedBrowserSitePermissionStore.js";
+import {
+  bindBrowserConsoleTabGuest,
+  clearBrowserConsoleTabsForWindow,
+  getBrowserConsoleTab,
+  isBrowserConsoleTabClosed,
+} from "./browserConsole/browserConsoleTabRegistry.js";
+import {
+  clearBrowserConsoleAgentBindingsForWindow,
+  getBrowserConsoleAgentBindingForSession,
+} from "./browserConsole/browserConsoleAgentBinding.js";
+import {
+  handleBrowserConsoleDeepEvent,
+  setBrowserConsoleNetworkSender,
+} from "./browserConsole/browserConsoleNetworkCapture.js";
+import { setBrowserConsoleDeepCapturePort } from "./browserConsole/browserConsoleDeepCapture.js";
 import {
   findWindowsProcessesReferencingResourceMarkers,
   probeWindowsPackagedResourceWritable,
@@ -337,6 +353,35 @@ const browserGuestManager = new BrowserGuestManager(
   (tabId, owner) => {
     const win = BrowserWindow.fromId(owner.windowId);
     if (win && !win.isDestroyed()) {
+      // 用户主动关闭的 console tab：guest 销毁触发的“重绑”不能把它重新创建。
+      if (isBrowserConsoleTabClosed(tabId)) return;
+      const consoleTab = getBrowserConsoleTab(tabId);
+      if (consoleTab) {
+        win.webContents.send(PlatformChannels.BrowserConsoleOpenTab, {
+          tabId,
+          instanceId: consoleTab.instanceId,
+          workspaceKey: owner.workspaceKey,
+          ...(owner.remoteSessionId ? { remoteSessionId: owner.remoteSessionId } : {}),
+          sessionId: owner.sessionId,
+        });
+        return;
+      }
+      // 已显式绑定控制台的会话：newTab 必须落到绑定实例，由控制台 UI 创建 guest。
+      const binding = getBrowserConsoleAgentBindingForSession({
+        windowId: owner.windowId,
+        workspaceKey: owner.workspaceKey,
+        sessionId: owner.sessionId,
+      });
+      if (binding) {
+        win.webContents.send(PlatformChannels.BrowserConsoleOpenTab, {
+          tabId,
+          instanceId: binding.instanceId,
+          workspaceKey: owner.workspaceKey,
+          ...(owner.remoteSessionId ? { remoteSessionId: owner.remoteSessionId } : {}),
+          sessionId: owner.sessionId,
+        });
+        return;
+      }
       win.webContents.send(PlatformChannels.BrowserViewReady, {
         workspaceKey: owner.workspaceKey,
         ...(owner.remoteSessionId ? { remoteSessionId: owner.remoteSessionId } : {}),
@@ -1905,8 +1950,10 @@ app.whenReady().then(async () => {
     locale: currentApplicationLocale,
     logger,
   });
+  let defaultBrowserNetworkPolicyReady = false;
   try {
     await applyDesktopChromiumNetworkPolicies(session, bootstrapSettings ?? {}, logger);
+    defaultBrowserNetworkPolicyReady = true;
   } catch (error) {
     logger.warn("[desktop-network] Chromium network policy bootstrap failed:", error);
   }
@@ -1916,6 +1963,7 @@ app.whenReady().then(async () => {
   const embeddedBrowserPermissionUiBridge = createEmbeddedBrowserPermissionUiBridge({ logger });
   embeddedBrowserPermissionUiBridge.registerResolveListener();
   setActiveEmbeddedBrowserPermissionUiBridge(embeddedBrowserPermissionUiBridge);
+  let defaultBrowserPermissionPolicyReady = false;
   try {
     await applyEmbeddedBrowserPermissionPolicy(session.fromPartition(EMBEDDED_BROWSER_PARTITION), {
       logger,
@@ -1926,8 +1974,32 @@ app.whenReady().then(async () => {
         join(app.getPath("userData"), "embedded-browser-site-permissions.json"),
       ),
     });
+    defaultBrowserPermissionPolicyReady = true;
   } catch (error) {
     logger.warn("[embedded-browser-permission] policy bootstrap failed:", error);
+  }
+
+  // 浏览器控制台（多实例 / 独立代理）：实例注册表与每实例 Session 装配。
+  // 必须在默认分区权限策略之后初始化：站点同意记录是进程级单例，控制台实例
+  // 以 initializeStore=false 复用它，记录按 partition 分桶。
+  try {
+    await initializeBrowserConsoleRuntime({
+      userDataPath: app.getPath("userData"),
+      logger,
+      settings: bootstrapSettings ?? {},
+      permission: {
+        prompt: embeddedBrowserPermissionUiBridge.promptPermission,
+        devicePicker: embeddedBrowserPermissionUiBridge.devicePicker,
+        onDisplayMediaRequest: embeddedBrowserPermissionUiBridge.onDisplayMediaRequest,
+      },
+      defaultInstanceReady: defaultBrowserNetworkPolicyReady && defaultBrowserPermissionPolicyReady,
+      internal: {
+        fromPartition: (partition) => session.fromPartition(partition),
+        clearData: clearEmbeddedBrowserData,
+      },
+    });
+  } catch (error) {
+    logger.warn("[browser-console] runtime bootstrap failed:", error);
   }
 
   await hydratePendingPostUpdateReleaseNotes(mainSettingService);
@@ -2027,8 +2099,12 @@ app.whenReady().then(async () => {
     // CDP-on-guest pivot：renderer `<webview>` dom-ready 上报 guest webContentsId → attach。
     attachBrowserGuest: (key, webContentsId, options) => {
       const result = browserGuestManager.attachGuest(key, webContentsId, options);
-      if (result.ok && options?.windowId !== undefined) {
-        embeddedBrowserDialogController.bindGuest(key, webContentsId, options.windowId);
+      if (result.ok) {
+        // 控制台 tab 的 guest 绑定后，webRequest/CDP 事件才能回填 tabId。
+        bindBrowserConsoleTabGuest(key, webContentsId);
+        if (options?.windowId !== undefined) {
+          embeddedBrowserDialogController.bindGuest(key, webContentsId, options.windowId);
+        }
       }
       return result;
     },
@@ -2231,10 +2307,35 @@ app.whenReady().then(async () => {
   }
 });
 
+// 控制台深采集：CDP attach/detach 仍由 BrowserGuestManager 持有（崩溃防护与空闲释放），
+// 这里只接事件出口与租约端口，避免控制台另造一套 debugger 生命周期。
+browserGuestManager.setConsoleNetworkEventHandler(({ tabId, method, params }) => {
+  const tab = getBrowserConsoleTab(tabId);
+  if (!tab) return;
+  handleBrowserConsoleDeepEvent({ instanceId: tab.instanceId, tabId, method, params });
+});
+setBrowserConsoleNetworkSender((webContentsId, channel, payload) => {
+  const target = webContents.fromId(webContentsId);
+  if (!target || target.isDestroyed()) return;
+  target.send(channel, payload);
+});
+setBrowserConsoleDeepCapturePort({
+  acquire: (tabId) => browserGuestManager.acquireConsoleDeepCapture(tabId),
+  release: (tabId) => browserGuestManager.releaseConsoleDeepCapture(tabId),
+  getResponseBody: (tabId, requestId) =>
+    browserGuestManager.getConsoleCapturedResponseBody(tabId, requestId),
+  updateTabBinding: (tabId, input) => browserGuestManager.updateConsoleTabBinding(tabId, input),
+  releaseClaimedTabs: (instanceId) => browserGuestManager.releaseClaimedConsoleTabs(instanceId),
+});
+
 app.on("browser-window-created", (_, win) => {
   const windowWebContentsId = win.webContents.id;
   win.on("closed", () => {
     browserScreenshotSurfaceCoordinator.handleWindowDestroyed(win.id);
+    // 先清控制台登记再关 guest：teardown 期间挂起中的 attach flight 会请求重绑，
+    // 此时给正在关闭的窗口发消息没有意义。
+    clearBrowserConsoleTabsForWindow(win.id);
+    clearBrowserConsoleAgentBindingsForWindow(win.id);
     browserGuestManager.closeWindow(win.id);
     windowWorkspaceMap.delete(win.id);
     windowTaskRealtimeHostIdMap.delete(win.id);

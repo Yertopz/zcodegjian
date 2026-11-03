@@ -34,6 +34,13 @@ const SEND_MESSAGE_PROVIDER_DESCRIPTION = [
   "Your plain text output is NOT visible to other agents — to communicate, you MUST call this tool. Messages from agents are delivered automatically; you don't check an inbox. Refer to local agents by the `agentId` returned in the Agent spawn result. To resume a completed agent, use its `agentId`; it resumes in the background and you'll be notified when it finishes.",
 ].join("\n");
 
+const PEER_SEND_MESSAGE_PROVIDER_DESCRIPTION = [
+  "# SendMessage",
+  "Send a message to a running peer in the same parent conversation. Use the peer's agent ID or its unique agent type name (optionally prefixed with @).",
+  "The peer must already be running and ready; this tool cannot start or resume agents. Names shared by multiple running peers require an agent ID. Sending to yourself or another session is rejected.",
+  "Peer messages have a shared limit and remain subject to each agent's permission rules. You may receive replies automatically during your current turn.",
+].join("\n\n");
+
 const SEND_MESSAGE_TOOL_OUTPUT_SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   type: "object",
@@ -140,6 +147,14 @@ export const sendMessageToolEntry: ToolEntry = {
     recordOutput: "summary",
   },
 };
+
+export function createSendMessageToolEntry(options: { peerOnly?: boolean } = {}): ToolEntry {
+  if (!options.peerOnly) return sendMessageToolEntry;
+  return {
+    ...sendMessageToolEntry,
+    metadata: { ...sendMessageToolEntry.metadata, description: PEER_SEND_MESSAGE_PROVIDER_DESCRIPTION },
+  };
+}
 
 function formatSendMessageModelContent(output: unknown): string {
   const result = SendMessageOutputSchema.parse(output);

@@ -21,6 +21,38 @@ import type {
   PrepareCuaHelperPermissionDragResult,
 } from "./cuaAccessibilitySettings.js";
 import type { BrowserViewportSize } from "./browser-use/command-metadata.js";
+import type {
+  BrowserConsoleClearInstanceDataRequest,
+  BrowserConsoleDeleteResult,
+  BrowserConsoleInstanceMutationResult,
+  BrowserConsolePrepareGuestAttachRequest,
+  BrowserConsolePrepareGuestAttachResult,
+  BrowserConsoleTabIdRequest,
+  BrowserConsoleTabRegisterRequest,
+  BrowserConsoleTabRegisterResult,
+  BrowserConsoleTabUnregisterResult,
+  BrowserConsoleOpenTabPayload,
+  BrowserInstanceCreateRequest,
+  BrowserInstanceIdRequest,
+  BrowserInstanceRecord,
+  BrowserInstanceUpdateRequest,
+  BrowserConsoleAgentBindingChangedPayload,
+  BrowserConsoleAgentBindingLookup,
+  BrowserConsoleSetAgentBindingRequest,
+  BrowserConsoleSetAgentBindingResult,
+  BrowserConsoleGetAgentBindingRequest,
+  BrowserConsoleDeepCaptureResult,
+  BrowserConsoleNetworkSnapshotResult,
+  BrowserNetworkBatchPayload,
+  BrowserNetworkClearRequest,
+  BrowserNetworkDeepCaptureRequest,
+  BrowserNetworkExportHarRequest,
+  BrowserNetworkHarExportResult,
+  BrowserNetworkResponseBodyRequest,
+  BrowserNetworkResponseBodyResult,
+  BrowserNetworkSnapshotRequest,
+  BrowserNetworkSubscribeRequest,
+} from "./browser-console/index.js";
 // Modified by ZCode: 自上游 aac47556 (Apache-2.0) 增量并入(F5):IPlatformService.pluginSandbox 的端口类型。
 import type { PluginSandboxPlatformPort } from "./mcp-apps/contract.js";
 import type {
@@ -1115,6 +1147,8 @@ export interface IPlatformService {
     remoteSessionId?: string;
     /** human browser tab 的对话归属；缺失时 main 必须保持不可认领，避免跨对话泄漏。 */
     sessionId?: string;
+    /** 控制台 tab：所属实例；有值时进入 console 可认领语义。 */
+    consoleInstanceId?: string;
     residencyGeneration?: number;
   }): Promise<BrowserGuestAttachResult>;
 
@@ -1151,6 +1185,100 @@ export interface IPlatformService {
 
   /** 清理内置浏览器持久化分区；cache 模式保留认证数据，all 模式清理全部站点数据。 */
   clearEmbeddedBrowserData?(mode: "cache" | "all"): Promise<EmbeddedBrowserDataClearResult>;
+
+  /** 列出浏览器控制台实例（多实例 / 独立代理）；Web/mobile fallback 不提供。 */
+  browserConsoleListInstances?(): Promise<BrowserInstanceRecord[]>;
+
+  /** 新建控制台实例；main 生成 id/partition 并完成 session 安全装配。 */
+  browserConsoleCreateInstance?(
+    input: BrowserInstanceCreateRequest,
+  ): Promise<BrowserConsoleInstanceMutationResult>;
+
+  /** 更新实例名称/颜色/代理；代理变更由 main 重新装配该实例 session。 */
+  browserConsoleUpdateInstance?(
+    input: BrowserInstanceUpdateRequest,
+  ): Promise<BrowserConsoleInstanceMutationResult>;
+
+  /** 删除非默认实例并清理其数据。 */
+  browserConsoleDeleteInstance?(
+    input: BrowserInstanceIdRequest,
+  ): Promise<BrowserConsoleDeleteResult>;
+
+  /** 创建 console `<webview>` 前的一次性 attach 许可；main 校验实例与 partition。 */
+  browserConsolePrepareGuestAttach?(
+    input: BrowserConsolePrepareGuestAttachRequest,
+  ): Promise<BrowserConsolePrepareGuestAttachResult>;
+
+  /** 清理指定实例的缓存或全部站点数据。 */
+  browserConsoleClearInstanceData?(
+    input: BrowserConsoleClearInstanceDataRequest,
+  ): Promise<EmbeddedBrowserDataClearResult>;
+
+  /** 登记 console tab 归属；创建 `<webview>` 前必须先登记。 */
+  browserConsoleRegisterTab?(
+    input: BrowserConsoleTabRegisterRequest,
+  ): Promise<BrowserConsoleTabRegisterResult>;
+
+  /** 关闭 console tab 时释放归属。 */
+  browserConsoleUnregisterTab?(
+    input: BrowserConsoleTabIdRequest,
+  ): Promise<BrowserConsoleTabUnregisterResult>;
+
+  /** 订阅/退订实例网络浅采集批次。 */
+  browserConsoleNetworkSubscribe?(input: BrowserNetworkSubscribeRequest): Promise<{ ok: boolean }>;
+
+  /** 读取实例网络浅采集缓冲快照。 */
+  browserConsoleNetworkSnapshot?(
+    input: BrowserNetworkSnapshotRequest,
+  ): Promise<BrowserConsoleNetworkSnapshotResult>;
+
+  /** 清空实例网络缓冲。 */
+  browserConsoleNetworkClear?(input: BrowserNetworkClearRequest): Promise<{ ok: boolean }>;
+
+  /** 导出 HAR 1.2；由 renderer 触发下载，不写盘。 */
+  browserConsoleNetworkExportHar?(
+    input: BrowserNetworkExportHarRequest,
+  ): Promise<BrowserNetworkHarExportResult>;
+
+  /** 对当前 tab 申请 CDP 深采集租约。 */
+  browserConsoleAcquireDeepCapture?(
+    input: BrowserNetworkDeepCaptureRequest,
+  ): Promise<BrowserConsoleDeepCaptureResult>;
+
+  /** 释放深采集租约，恢复空闲 detach。 */
+  browserConsoleReleaseDeepCapture?(
+    input: BrowserNetworkDeepCaptureRequest,
+  ): Promise<{ ok: boolean }>;
+
+  /** 读取深采集响应体（限额 1MB）。 */
+  browserConsoleGetResponseBody?(
+    input: BrowserNetworkResponseBodyRequest,
+  ): Promise<BrowserNetworkResponseBodyResult>;
+
+  /** 设置「AI 控制此浏览器」显式绑定。 */
+  browserConsoleSetAgentBinding?(
+    input: BrowserConsoleSetAgentBindingRequest,
+  ): Promise<BrowserConsoleSetAgentBindingResult>;
+
+  /** 读取当前会话的控制台实例绑定。 */
+  browserConsoleGetAgentBinding?(
+    input: BrowserConsoleGetAgentBindingRequest,
+  ): Promise<BrowserConsoleAgentBindingLookup>;
+
+  /** 注册网络采集批次回调（浅采集与 CDP 深采集共用同一批次流），返回 disposer。 */
+  onBrowserConsoleNetworkBatch?(
+    handler: (payload: BrowserNetworkBatchPayload) => void,
+  ): () => void;
+
+  /** 注册绑定被外部清除的通知，返回 disposer。 */
+  onBrowserConsoleAgentBindingChanged?(
+    handler: (payload: BrowserConsoleAgentBindingChangedPayload) => void,
+  ): () => void;
+
+  /** 注册 main 为已绑定会话分配 console tab 的请求，返回 disposer。 */
+  onBrowserConsoleOpenTab?(
+    handler: (payload: BrowserConsoleOpenTabPayload) => void,
+  ): () => void;
 
   /** 注册新版本已下载完毕的回调，参数为新版本号，返回 disposer */
   onUpdateReady(callback: (version: string) => void): () => void;

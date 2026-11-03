@@ -86,6 +86,7 @@ export const SessionEventType = {
   SessionForked: "session_forked",
   SessionCompacted: "session_compacted",
   SessionTitleUpdated: "session_title_updated",
+  MainAgentPromptSelected: "main_agent_prompt_selected",
   SessionModeChanged: "session_mode_changed",
   SessionEnded: "session_ended",
   TurnStarted: "turn_started",
@@ -1228,6 +1229,7 @@ export type SessionEventPayload =
   | SessionForkedPayload
   | SessionCompactedPayload
   | SessionTitleUpdatedPayload
+  | { id: string | null }
   | SessionModeChangedPayload
   | TurnStartedPayload
   | TurnInputReceivedPayload

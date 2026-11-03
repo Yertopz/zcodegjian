@@ -31,7 +31,7 @@
  */
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
-import { resolve, relative, dirname, basename } from "node:path";
+import { resolve, relative, dirname, basename, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -132,7 +132,9 @@ function main() {
     const { hits } = scanFile(file);
     const count = hits.reduce((sum, h) => sum + h.count, 0);
     if (count > 0) {
-      const rel = relative(root, file);
+      // 基线 key 统一用 POSIX 分隔符：Windows 上 relative() 返回反斜杠，
+      // 不归一化会让基线里的文件永远匹配不上（存量命中被误报为新增）。
+      const rel = relative(root, file).split(sep).join("/");
       currentFiles[rel] = count;
       currentTotal += count;
       for (const h of hits) samples.push({ file: rel, ...h });

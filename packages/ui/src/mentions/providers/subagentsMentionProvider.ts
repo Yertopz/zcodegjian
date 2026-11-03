@@ -55,7 +55,8 @@ export function mapSubagentsToMentionItemsForTest(agents: SubagentMentionInput[]
       id: `subagent:${agent.id}`,
       category: "subagents",
       label: agent.name,
-      description: agent.description ? `${sourceLabel} · ${agent.description}` : sourceLabel,
+      // 模型选择属于 Agent 配置；继承父模型时保持省略，避免显示虚构的固定模型。
+      description: [sourceLabel, agent.description?.trim(), model].filter(Boolean).join(" · "),
       value: agent.name,
       markdown: buildSubagentMentionMarkdown(agent.name),
       keywords: [

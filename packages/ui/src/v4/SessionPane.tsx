@@ -120,7 +120,6 @@ import {
 import type { ConversationDropTargetController } from "@/v4/composer/conversationDropTarget.js";
 import { shouldIgnoreEscapeForStopGeneration } from "@/v4/composer/escapeStop.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
-import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
 import { ConversationHeader, type PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
 import { ConversationQueuePanel } from "@/v4/ConversationQueuePanel.js";
 import { projectPendingGuideQueue } from "@/v4/pendingGuideProjection.js";
@@ -313,7 +312,7 @@ export interface SessionPaneProps {
   /** 跨 workspace pane 的归属徽标（pane workspace ≠ shell 当前 workspace 时下发）。 */
   workspaceBadge?: PaneWorkspaceBadge;
   /**
-   * 草稿态 composer 上方的 contextHeader（m5：workspace 切换菜单 + Git 分支）。
+   * 草稿态 composer 下方的 contextHeader（workspace 切换菜单 + Git 分支）。
    * 由 app-shell 构造下发（依赖 workspaceTabs / 远程连接回调等壳层能力）；
    * 非 primary pane 不下发（workspace 切换是壳级动作）。
    */
@@ -1167,6 +1166,7 @@ export function SessionPane({
     handleDraftSelectModel,
     handleDraftSelectThought,
     handleDraftSwitchMode,
+    handleDraftSelectMainAgentPrompt,
     promoteComposerDraft,
     captureAcceptedModelSelection,
     replaceComposerDraft,
@@ -2692,6 +2692,7 @@ export function SessionPane({
       appFollowupMode,
       handleDraftSessionCreated,
       handleDraftSwitchMode,
+      handleDraftSelectMainAgentPrompt,
       handleOpenSelectionSideConversationWithPrompt,
       intl,
       lease,
@@ -3168,6 +3169,17 @@ export function SessionPane({
       };
 
       if (
+        desiredConfig.mainAgentPromptId !== undefined &&
+        desiredConfig.mainAgentPromptId !== projectedConfig?.mainAgentPromptId
+      ) {
+        const ack = await dispatchConfigCas(
+          "setMainAgentPrompt",
+          { id: desiredConfig.mainAgentPromptId },
+          { targetSessionId },
+        );
+        requireAcceptedConfigAck("setMainAgentPrompt", ack);
+      }
+      if (
         desiredConfig.followupMode &&
         desiredConfig.followupMode !== projectedConfig?.followupMode
       ) {
@@ -3327,6 +3339,25 @@ export function SessionPane({
       zcodeSessionService,
       zcodeTaskService,
     ],
+  );
+
+  const handleMainAgentPromptSelect = useCallback(
+    async (id: string | null) => {
+      if (!sessionId) {
+        const targetSessionId = prewarmSessionId;
+        if (targetSessionId) {
+          const ack = await dispatchConfigCas("setMainAgentPrompt", { id }, { targetSessionId });
+          if (!ack || !["accepted", "noop", "duplicate"].includes(ack.status))
+            throw new Error(ack?.reasonCode ?? "missing-ack");
+        }
+        handleDraftSelectMainAgentPrompt(id);
+        return;
+      }
+      const ack = await dispatchConfigCas("setMainAgentPrompt", { id });
+      if (!ack || !["accepted", "noop", "duplicate"].includes(ack.status))
+        throw new Error(ack?.reasonCode ?? "missing-ack");
+    },
+    [sessionId, prewarmSessionId, dispatchConfigCas, handleDraftSelectMainAgentPrompt],
   );
 
   // 模式与模型一样属于下一次 Submission；选择时只更新 Composer。
@@ -4202,6 +4233,7 @@ export function SessionPane({
       onStop={handleStopFromButton}
       onSelectModel={handleSelectModel}
       onSelectThought={handleSelectThought}
+      onMainAgentPromptSelect={handleMainAgentPromptSelect}
       onSwitchMode={handleSwitchMode}
       onOpenRunningBackgroundWorks={
         sessionId && runningBackgroundWorkCount > 0 ? handleOpenRunningBackgroundWorks : undefined
@@ -4356,22 +4388,7 @@ export function SessionPane({
         />
       ) : null}
       {composerNode}
-      {/* 办公模式显示主动任务推荐；编程模式保留原有小型场景入口。 */}
-      {isDraft && (!isOfficeMode || sharedSettings?.proactiveSuggestionsEnabled === true) ? (
-        <ConversationDraftSuggestedPromptsContainer
-          className={isOfficeMode ? "mt-4" : "mt-6"}
-          proactive={isOfficeMode}
-          onOpenAutomations={
-            onOpenAutomationsMain
-              ? (automationTab) => onOpenAutomationsMain(undefined, automationTab)
-              : undefined
-          }
-          workspacePath={workspacePath}
-          workspaceIdentity={workspaceIdentity}
-          remoteSessionId={remoteSessionId ?? undefined}
-          isDesktop={isDesktop}
-        />
-      ) : null}
+      {/* 草稿输入区不展示推荐提示词按钮，避免输入框下方额外占用一行空间。 */}
     </>
   );
   // 进入/退出分享时 chat dock 与分享 dock 高度不同；共享同一个 grid 单元做上下位移淡入淡出，

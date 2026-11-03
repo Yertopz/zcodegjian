@@ -1,4 +1,5 @@
 import type { IPlatformService, UpdateStatePayload } from "@zcode/shared";
+import { useLayoutEffect, useRef } from "react";
 import { cn } from "@/components/lib/utils.js";
 import {
   ArrowLeftIcon,
@@ -75,6 +76,38 @@ export function DesktopTopOverlay({
   newTaskDisabledReason,
 }: DesktopTopOverlayProps) {
   const { intl } = useZCodeIntl();
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const actions = actionsRef.current;
+    const shell = actions?.closest<HTMLElement>("[data-workspace-shell]");
+    if (!actions || !shell) return;
+    // 浮层脱离文档流，新主视图必须按真实按钮右边界避让，避免侧栏收起后互相覆盖。
+    const measure = () => {
+      const frame = shell.querySelector("[data-workspace-conversation-frame]");
+      const inset = isSidebarVisible
+        ? 0
+        : Math.max(
+            0,
+            actions.getBoundingClientRect().right -
+              (frame?.getBoundingClientRect().left ?? shell.getBoundingClientRect().left) +
+              8,
+          );
+      shell.style.setProperty("--workspace-view-toolbar-inset", `${Math.ceil(inset)}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(actions);
+    observer.observe(shell);
+    const frame = shell.querySelector("[data-workspace-conversation-frame]");
+    if (frame) observer.observe(frame);
+    // 侧栏宽度有 CSS 过渡，测量应跟随实际位置直至过渡结束。
+    shell.addEventListener("transitionend", measure);
+    measure();
+    return () => {
+      observer.disconnect();
+      shell.removeEventListener("transitionend", measure);
+      shell.style.removeProperty("--workspace-view-toolbar-inset");
+    };
+  }, [isSidebarVisible, isMacDesktop, isMacFullscreen, macWindowControlsLeftPaddingPx]);
   const SidebarToggleIcon = isSidebarVisible ? PanelLeftClose : PanelLeftOpen;
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesCustomCaptionArea = isWindowsDesktop || isLinuxDesktop;
@@ -124,6 +157,8 @@ export function DesktopTopOverlay({
         )}
       >
         <div
+          ref={actionsRef}
+          data-testid="desktop-top-overlay-actions"
           className={cn(
             // 顶部浮层按钮虽然单个按钮打了 no-drag，但外层容器本身仍悬在窗口标题区上方。
             // Electron 在这类覆盖层上会优先按父级命中拖拽区域，导致点击被窗口拖动吞掉。

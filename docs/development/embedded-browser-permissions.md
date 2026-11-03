@@ -43,7 +43,7 @@ guest 页面发起请求
   └─ permission check ──► setPermissionCheckHandler(同步读内存记录,与 request 口径一致)
 ```
 
-- **唯一所有者**:`embeddedBrowserSitePermissions.ts` 的模块级单例管理站点同意记录(内存为同步读来源,store 异步落盘)。设置页「网站权限」与「清除浏览器数据」经同一模块读写。
+- **唯一所有者**:`embeddedBrowserSitePermissions.ts` 的模块级单例管理站点同意记录(内存为同步读来源,store 异步落盘)。设置页「网站权限」与「清除浏览器数据」经同一模块读写。多 partition（浏览器控制台实例，见 176）复用同一份记录：`applyEmbeddedBrowserPermissionPolicy` 传 `initializeStore:false`，记录只能由默认分区初始化一次，避免后装配实例把先装配实例的同意记录重置为空。
 - **弹窗桥所有者**:`embeddedBrowserPermissionUiBridge.ts` 的模块级 `activeBridge`(`setActiveEmbeddedBrowserPermissionUiBridge`),index.ts 启动时装配一次,windowChrome 直接取用,避免多层 options 透传。
 - **超时**:20s 无响应按 dismiss/cancel 结算(面板不可见或 agent 后台场景自然拒绝)。
 - **inflight 去重**:同 origin+permission 并发请求共享一个弹窗(与 pluginSandbox permissionGate 同款模式)。
@@ -85,3 +85,7 @@ guest 页面发起请求
 1. main 策略模块 + 全部 handler + select-\*/displayMedia 监听(弹窗未注入时敏感项一律拒绝 + 日志——安全闭环,可单独堵漏)。
 2. 弹窗桥 + IPC(含站点权限 4 个 handler)。
 3. windowChrome 蓝牙守卫接线 + 单测。
+
+## 界面与接线现状
+
+站点权限 UI、store 与 hook 已接入；main 侧 bridge 由桌面入口装配，提示条在浏览器视图显示，站点权限页由侧边面板提供。浏览器控制台使用实例分区隔离；相关约束见 [浏览器控制台](176-browser-console.md)。

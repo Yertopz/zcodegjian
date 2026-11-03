@@ -194,6 +194,8 @@ The dynamic-workflow timeline draws with a feature-scoped token family:
 - **UI Sans**: use the app's default `font-sans` stack for almost all interface text.
 - **UI Mono**: use `font-mono` for paths, commands, code, identifiers, shortcuts, commit hashes, model IDs, and terminal-like data.
 
+The UI sans stack prefers platform system fonts, with explicit CJK sans-serif fallbacks. Shared theme surface and login/composer constraints are documented in [工作区界面视觉约束](docs/development/179-apple-ui-refresh.md).
+
 ### UI font tokens
 
 All interface typography must use the dedicated `text-ui-*` scale. The Appearance setting controls `--ui-font-size`, whose default is `14px`:
@@ -512,7 +514,7 @@ Rules:
 ## Accessibility and Internationalization
 
 - Support keyboard navigation as a first-class interaction path.
-- Preserve visible focus behavior through the repo's established focus styling patterns.
+- Interactive controls show a visible `:focus-visible` outline; forced-colors mode uses the system highlight color. Focus must not remove the shadows of menus and dialogs.
 - Ensure contrast remains safe in light, dark, and Zai modes.
 - Write layouts that tolerate longer translations.
 - Avoid icon-only meaning when a text label is practical.

@@ -442,7 +442,7 @@ function ToolCheckbox({
   );
 }
 
-function AgentListRow({
+export function AgentListRow({
   agent,
   pluginIconItem,
   isOperating,
@@ -498,11 +498,8 @@ function AgentListRow({
     <div
       data-testid={testId(TID_SUBAGENT_ROW, agent.name)}
       className={cn(
-        "grid cursor-default items-center gap-3 px-4 py-3 transition-colors",
+        "flex min-w-0 cursor-default flex-col items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors",
         rowEditable && "hover:bg-hover",
-        hasModelOverrideControl
-          ? "grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
-          : "grid-cols-[auto_minmax(0,1fr)_auto]",
       )}
       {...settingsResourceRowInteraction(rowEditable ? () => onEdit(agent) : undefined)}
     >
@@ -526,7 +523,7 @@ function AgentListRow({
         ) : null}
       </div>
 
-      <div className="min-w-0">
+      <div className="min-w-0 w-full">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="truncate text-ui-base font-medium text-foreground">{displayName}</span>
           {showModelBadge ? <AgentBadge>{modelLabel}</AgentBadge> : null}
@@ -537,14 +534,7 @@ function AgentListRow({
         </p>
       </div>
 
-      <div
-        className={cn(
-          "flex items-center gap-2",
-          hasModelOverrideControl
-            ? "col-span-2 min-w-0 justify-end sm:col-span-1 sm:shrink-0"
-            : "shrink-0",
-        )}
-      >
+      <div className="mt-auto flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
         {hasModelOverrideControl ? (
           <SubagentModelOverrideControl
             agent={agent}
@@ -1679,33 +1669,31 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
   }
 
   const renderAgentList = (items: AgentSummary[]) => (
-    <div className="overflow-hidden rounded-xl bg-surface">
-      {items.map((agent, index) => (
-        <div key={agent.id}>
-          {index > 0 ? <div className="h-px bg-border/50" aria-hidden="true" /> : null}
-          <AgentListRow
-            agent={agent}
-            pluginIconItem={
-              agent.pluginId
-                ? pluginIconItemById.get(agent.pluginId)
-                : agent.pluginName
-                  ? {
-                      name: agent.pluginName,
-                      listing: resolveUniquePluginListingByName(availablePlugins, agent.pluginName),
-                    }
-                  : undefined
-            }
-            isOperating={operatingAgentId === agent.id || refreshing}
-            modelGroups={chatModelSelectGroups}
-            modelSelectionView={modelSelectionView}
-            modelSelectionLoading={modelSelectionLoading}
-            modelSelectGroups={subagentModelSelectGroups}
-            onModelOverrideChange={handleModelOverrideChange}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            onToggle={handleToggle}
-          />
-        </div>
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {items.map((agent) => (
+        <AgentListRow
+          key={agent.id}
+          agent={agent}
+          pluginIconItem={
+            agent.pluginId
+              ? pluginIconItemById.get(agent.pluginId)
+              : agent.pluginName
+                ? {
+                    name: agent.pluginName,
+                    listing: resolveUniquePluginListingByName(availablePlugins, agent.pluginName),
+                  }
+                : undefined
+          }
+          isOperating={operatingAgentId === agent.id || refreshing}
+          modelGroups={chatModelSelectGroups}
+          modelSelectionView={modelSelectionView}
+          modelSelectionLoading={modelSelectionLoading}
+          modelSelectGroups={subagentModelSelectGroups}
+          onModelOverrideChange={handleModelOverrideChange}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          onToggle={handleToggle}
+        />
       ))}
     </div>
   );

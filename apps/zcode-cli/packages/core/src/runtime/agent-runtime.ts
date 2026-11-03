@@ -349,6 +349,8 @@ export interface AgentRuntime {
   getMode(): CollaborationMode;
   getPlanEnabled(): boolean;
   grantPermissionFullAccess(interactionId: string, signal?: AbortSignal): Promise<string>;
+  getMainAgentPromptId(): string | null;
+  setMainAgentPrompt(options: { id: string | null; traceContext?: TraceContext }): Promise<void>;
   setExecutionState(
     input: { mode?: string; planEnabled?: boolean },
     traceContext?: TraceContext,

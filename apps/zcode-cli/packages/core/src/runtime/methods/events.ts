@@ -1,3 +1,4 @@
+import { buildMainAgentPromptEntry } from "./main-agent-prompt.js";
 import type { WorkspaceId } from "@zcode/contracts";
 import { buildExecutionStateEntry, readRuntimeExecutionState } from "../execution-state.js";
 import {
@@ -611,6 +612,9 @@ export async function ensureSessionPersisted(
     phase = "session_execution_state";
     await this.sessionStore.saveSessionEntry?.(
       buildExecutionStateEntry(this.sessionId, readRuntimeExecutionState(this)),
+    );
+    await this.sessionStore.saveSessionEntry?.(
+      buildMainAgentPromptEntry(this.sessionId, this.config.mainAgentPromptId ?? null),
     );
     this.sessionPersisted = true;
     this.logger?.debug("Session persisted", {

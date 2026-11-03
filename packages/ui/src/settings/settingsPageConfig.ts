@@ -84,6 +84,12 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     groupId: "agentCapabilities",
   },
   {
+    id: "mainAgentPrompts",
+    icon: WandSparkles,
+    titleId: "settings.mainAgentPrompts.title",
+    groupId: "agentCapabilities",
+  },
+  {
     id: "subagents",
     icon: Bot,
     titleId: "settings.subagents.title",

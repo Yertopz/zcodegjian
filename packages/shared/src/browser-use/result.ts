@@ -20,6 +20,8 @@ export const browserTabSummarySchema = z
      */
     active: z.boolean().optional(),
     lifecycle: z.enum(["active", "deliverable", "handoff"]).optional(),
+    /** 控制台 tab 所属实例；侧边栏/agent tab 缺省。 */
+    instanceId: z.string().optional(),
   })
   .strict();
 export type BrowserTabSummary = z.infer<typeof browserTabSummarySchema>;
@@ -32,6 +34,8 @@ export const browserUserTabInfoSchema = z
     tabGroup: z.string().optional(),
     title: z.string().optional(),
     url: z.string().optional(),
+    /** 控制台 tab 所属实例；侧边栏 tab 缺省。 */
+    instanceId: z.string().optional(),
   })
   .strict();
 export type BrowserUserTabInfo = z.infer<typeof browserUserTabInfoSchema>;

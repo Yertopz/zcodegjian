@@ -3,6 +3,7 @@ import { botGroupInputSourceSchema } from "../bots.js";
 // CLI admission 后的自包含输入事实。
 // queue / guide / runtime / transcript 只能携带同一个 intent，不允许各层重建字段。
 import { z } from "zod";
+import { mainAgentPromptSnapshotSchema } from "../main-agent-prompts.js";
 import { timestampSchema } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
 import { highspeedMessageMetaSchema } from "../highspeed.js";
@@ -75,6 +76,7 @@ export const conversationInputIntentSchema = z
     text: z.string(),
     attachments: z.array(attachmentRefSchema).default([]),
     // optional 只服务旧 snapshot hydration；新 admission 必须填入完整 Submission。
+    mainAgentPrompt: mainAgentPromptSnapshotSchema.optional(),
     modelSelection: modelSelectionSchema.optional(),
     mode: submissionModeSchema.optional(),
     planEnabled: z.boolean().optional(),

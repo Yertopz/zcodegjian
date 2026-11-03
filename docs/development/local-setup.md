@@ -6,6 +6,8 @@
 
 版本以 [mise.toml](../../mise.toml) 为准：Node.js **24.14.0**、pnpm **10.33.2**。
 
+Windows 桌面开发入口会使用系统 .NET Framework 编译 SSH 工作台的 RDP helper，并探测系统 RDP ActiveX。开发缓存位于用户 `LOCALAPPDATA/ZCode-CE/server-rdp/`；构建或控件探测失败会报错。服务器、审批与手动验收约束见 [177 号文档](177-ssh-server-workbench-plan.md)。其他平台的 SSH 入口可用，RDP 适配器尚不可用。
+
 ## 初始化
 
 ```bash
@@ -13,6 +15,22 @@ pnpm install
 ```
 
 > `pnpm bootstrap` 会额外准备桌面运行资源与远程资源（需要网络下载 Electron / Node 运行时）。仅做源码开发时，`pnpm install` 即可。
+
+### Windows：Electron 启动即报 `EXCEPTION_BREAKPOINT`
+
+如果构建成功，但 Electron 以 `2147483651`（`0x80000003`）退出，先独立验证运行时，再判断是否为项目代码问题：
+
+```powershell
+node -e "const r=require('node:child_process').spawnSync(require('electron'),['--version'],{encoding:'utf8'}); console.log({status:r.status,stdout:r.stdout,stderr:r.stderr})"
+icacls.exe node_modules\electron\dist\electron.exe
+icacls.exe packages\desktop\dist\win-unpacked\ZCode-CE.exe
+```
+
+可执行文件继承 `Low Mandatory Level` 时，Electron 会以 Low 完整性运行。其沙箱初始化可能因创建备用窗口站被 Windows 拒绝而触发断言；即使压缩包校验和及所有文件内容正确，也不能排除这个文件系统元数据问题。
+
+运行已安装版本时，也要检查开始菜单快捷方式目标所指向的 `ZCode-CE.exe`。若它带 `Low Mandatory Level`，窗口可能只显示空白底色后以 `2147483651`（`0x80000003`）退出。Electron 主进程应以当前普通用户的 Medium 完整性运行，并保留 Chromium 沙箱。只对已确认继承 Low 标签的实际运行文件执行 `icacls.exe "<ZCode-CE.exe 的完整路径>" /setintegritylevel M`；若返回“拒绝访问”，在管理员 PowerShell 中只对该文件重试。不要对整个磁盘或系统目录重置 ACL，也不要在默认启动命令中加入 `--no-sandbox`。
+
+若旧账号的权限使原目录无法修改，可将与当前 `electron/package.json` 版本一致、已按 `electron/checksums.json` 校验的官方压缩包，解压到当前账号拥有的 `%LOCALAPPDATA%\ZCode-CE\dev-electron\<版本>-win32-<架构>`。确认该副本正常执行 `--version` 后，将本地 `node_modules\electron\dist` 替换为指向该目录的 junction。保留原目录直至桌面窗口成功加载，再清理旧副本。这是本机依赖修复，运行器不会自动迁移运行时；重装依赖后需重新检查实际执行的文件标签。
 
 ## 常用命令
 
@@ -68,13 +86,7 @@ node --import tsx --import ../../../../packages/services/test/support/zcodeSourc
 
 ## 类型检查的覆盖范围
 
-`pnpm typecheck` 的工程列表**不含** `packages/desktop/tsconfig.main.json` 与 `tsconfig.renderer.json`。改动 desktop main/renderer 时需额外跑：
-
-```bash
-bash scripts/desktop-typecheck-baseline.sh diff
-```
-
-它用 `git worktree` 取真实 HEAD 做对比，只报**净增**的错误。
+根 `package.json` 的 `pnpm typecheck` 已覆盖 desktop 的 host、preload、main、renderer 与 scheduler 工程。桌面改动执行该命令即可覆盖这些入口；工程列表以当前 `package.json` 为准。
 
 ## 在共享机器上起停本地服务（多 agent / 多人同时开工时必读）
 

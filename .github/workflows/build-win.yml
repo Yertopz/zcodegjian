@@ -1,0 +1,62 @@
+# 只构建 Windows x64 安装包，产物上传为 workflow artifact。
+#
+# 触发：任意分支 push，或 Actions 页面手动 Run workflow。分支过滤意味着 tag push 不会
+# 触发（避免 tag 构建走进 electron-builder 的发布路径）。
+#
+# --publish never 必须显式传：electron-builder 在 CI 下会把未指定的策略推断成
+# onTagOrDraft，而 GitHub provider 在该策略下的判据只有「不是 PR」——不是 tag 也会发布。
+# 本仓库是构建副本，发布配置仍指向原项目 Zcode-CE/Zcode-CE，不显式禁止会尝试向上游发布。
+name: Build Windows installer
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-win-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # 不传 version：读取根 package.json 的 "packageManager"。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows installer
+        env:
+          ZCODE_ENV: production
+          # GitHub runner 在境外，显式改用官方源，避免 bundle.mjs 默认的 npmmirror 变慢或失败。
+          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+        run: pnpm bundle:desktop --os win --arch x64 --publish never
+
+      # .blockmap 一起留存，否则 electron-updater 的差分下载会退化为全量包。
+      - name: Upload installer
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: zcode-ce-windows
+          if-no-files-found: warn
+          path: |
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/*.yml
+            packages/desktop/dist/*.blockmap

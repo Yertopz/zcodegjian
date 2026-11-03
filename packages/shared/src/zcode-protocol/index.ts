@@ -1,3 +1,4 @@
+import { mainAgentPromptLibrarySchema } from "../main-agent-prompts.js";
 import { zcodeProtocolTraceSchema } from "./trace.js";
 // Bot 反向回复的名字解析/待澄清结果与 App、CLI 使用同一严格 schema。
 export { channelReplyRequestSchema, channelReplyResultSchema } from "../channel-mention.js";
@@ -1996,6 +1997,7 @@ export const zcodeSessionEventsParamsSchema = z
 export type ZCodeSessionEventsParams = z.infer<typeof zcodeSessionEventsParamsSchema>;
 
 export const zcodeSessionRuntimePreferencesScopeSchema = z.enum([
+  "main-agent-prompts",
   "runtime-materialization",
   "user-execution",
 ]);
@@ -2032,6 +2034,7 @@ export type ZCodeModelContextBudgetStrategy = z.infer<typeof zcodeModelContextBu
 
 export const zcodeSessionRuntimePreferencesResultSchema = z
   .object({
+    mainAgentPrompts: mainAgentPromptLibrarySchema.optional(),
     // X16：Host 在 runtime-materialization 时机解析出的附加目录。optional，且刻意不给默认值：
     // 旧 Host 不回该键 ⇒ 无附加目录（回落成 [] 会伪造「已解析且为空」的事实）。
     additionalDirectories: z.array(nonEmptyString).max(256).optional(),
@@ -2386,7 +2389,29 @@ const zcodeWorkspaceModelToolCallSchema = z
   .strict();
 const zcodeWorkspaceModelMessageSchema = z.discriminatedUnion("role", [
   z.object({ role: z.literal("system"), content: z.string() }).strict(),
-  z.object({ role: z.literal("user"), content: z.string() }).strict(),
+  z
+    .object({
+      role: z.literal("user"),
+      content: z.union([
+        z.string(),
+        z
+          .array(
+            z.discriminatedUnion("type", [
+              z.object({ type: z.literal("text"), text: z.string().max(100000) }).strict(),
+              z
+                .object({
+                  type: z.literal("image"),
+                  mediaType: z.literal("image/png"),
+                  dataUrl: z.string().startsWith("data:image/png;base64,").max(12_000_000),
+                })
+                .strict(),
+            ]),
+          )
+          .min(1)
+          .max(4),
+      ]),
+    })
+    .strict(),
   z
     .object({
       role: z.literal("assistant"),

@@ -258,6 +258,7 @@ export const commandPayloadSchemas = {
   }),
   // additive（冻结面按黄金测试背书演进）：agent 协作模式切换。
   // 值域 = core CollaborationMode 的可切换子集（auto 非用户可切，不进 UI 命令面）。
+  setMainAgentPrompt: z.object({ id: z.string().min(1).max(128).nullable() }),
   switchCollaborationMode: z.object({
     mode: z.enum(["build", "edit", "plan", "yolo", "guarded"]),
   }),
@@ -325,6 +326,7 @@ export const COMMANDS_REQUIRING_BASE_REVISION: ReadonlySet<CommandType> = new Se
   "setAutoDrain",
   "switchModelConfig",
   "switchCollaborationMode",
+  "setMainAgentPrompt",
   "setFollowupMode",
   "pauseGoal",
   "resumeGoal",

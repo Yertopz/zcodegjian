@@ -142,6 +142,7 @@ import { usePptxElementReferences } from "@/v4/composer/usePptxElementReferences
 import { PptxElementReferenceChip } from "@/v4/composer/PptxElementReferenceChip.js";
 import { useOpenPptxElementReference } from "@/v4/composer/useOpenPptxElementReference.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
+import { MainAgentPromptSelector } from "@/v4/composer/MainAgentPromptSelector.js";
 import { useConversationSelectionReferences } from "@/v4/composer/useConversationSelectionReferences.js";
 import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBackgroundWorkTrigger.js";
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
@@ -361,7 +362,7 @@ interface ConversationComposerProps {
   createSubmissionFromComposer?: () => ComposerSubmissionConfig | null;
   /**
    * 空态 contextHeader（m5-composer-parity）：workspace 切换菜单 + Git 分支
-   * 切换器，渲染在编辑器上方（旧 ChatViewComposer contextHeaderContent 同位）。
+   * 切换器，渲染在编辑器下方。
    * 仅草稿态由宿主下发；会话建立后为空。
    */
   contextHeader?: ReactNode;
@@ -412,6 +413,7 @@ interface ConversationComposerProps {
   ) => void;
   /** 选中思考深度；同时带上用户操作时看到的模型，避免异步回流后把 thought 归到另一模型。 */
   onSelectThought: (thought: string, modelContext: { provider: string; model: string }) => void;
+  onMainAgentPromptSelect: (id: string | null) => Promise<void>;
   onSwitchMode: (mode: string) => void;
   /** 打开当前 session 的 Status panel，并直达 Running 明细。 */
   onOpenRunningBackgroundWorks?: () => void;
@@ -498,6 +500,7 @@ function ConversationComposerImpl({
   onStop,
   onSelectModel,
   onSelectThought,
+  onMainAgentPromptSelect,
   onSwitchMode,
   onOpenRunningBackgroundWorks,
   backgroundWorkOpenTarget = "panel",
@@ -2019,6 +2022,18 @@ function ConversationComposerImpl({
           onConfigPickerOpenChange={handleConfigPickerOpenChange}
           onSwitchMode={onSwitchMode}
         />
+        {/* 主 Agent 提示词选择属于权限相邻的会话控制；放在工具栏可省下输入框上方整行空间。 */}
+        <MainAgentPromptSelector
+          workspacePath={workspacePath}
+          workspaceIdentity={workspaceIdentity}
+          selectedId={
+            draftMode
+              ? draftConfig?.mainAgentPromptId
+              : (snapshot?.config.mainAgentPromptId ?? null)
+          }
+          onSelect={onMainAgentPromptSelect}
+          disabled={disabled}
+        />
         {/* 附件画廊重构曾整段覆盖 leadingActions，误删 CUA 常驻入口。
             入口自身继续负责平台、远程与设置可见性，不在 composer 重复判定。 */}
         <V4ComposerCuaEntry
@@ -2060,11 +2075,7 @@ function ConversationComposerImpl({
     // 外层 bottom dock 负责 sticky 与横向主列宽度；composer 自身组织错误提示与输入壳。
     // centered（居中草稿布局，m5）：收窄 max-w-2xl（旧
     // getChatViewComposerWidthClassName 的 draft 档），由宿主的居中容器摆位。
-    // 有 contextHeader（草稿态）时，内层输入 surface 套旧 ChatViewComposer 同款卡：
-    // rounded-2xl bg-surface shadow-xl/5；会话态回落不透明页面底色。
-    // 错误横幅虽然排在 contextHeader 前面，但不能与输入区共用同一个圆角 surface，
-    // 视觉上会被误认为输入卡标题栏；将 surface 边界收窄到工作区头和编辑器后，桌面与手机
-    // Web 仍共享同一 DOM 顺序，同时恢复错误提示与输入卡之间的独立层级。
+    // 工作区选择位于草稿输入卡片下方；编辑器和会话提交路径保持不变。
     <div
       data-testid={TID_V4_COMPOSER}
       data-input-routing={mode}
@@ -2103,16 +2114,7 @@ function ConversationComposerImpl({
           />
         </div>
       ) : null}
-      <div
-        className={cn(
-          "chat-composer-input-surface w-full",
-          contextHeader && "rounded-2xl bg-surface shadow-xl/5",
-        )}
-      >
-        {contextHeader ? (
-          // 旧 ChatViewComposer contextHeaderContent 同款包装（workspace 菜单 + Git 分支）。
-          <div className="p-1.5 flex min-w-0 flex-wrap items-center gap-0">{contextHeader}</div>
-        ) : null}
+      <div className="chat-composer-input-surface w-full">
         {conversationSelectionLimitReason ? (
           <div
             role="alert"
@@ -2145,7 +2147,7 @@ function ConversationComposerImpl({
           onModifiedSubmit={modifiedEnterSubmits ? handleModifiedEditorSubmit : undefined}
           submitLabel={sendTooltipTitle}
           showSlashButton
-          // @ 是 Plugin / 文件 / 对话 / 画板主入口；# 会话与 $ / ¥ / ￥ Skills
+          // @ 是 Agent / Plugin / 文件 / 对话 / 画板主入口；# 会话与 $ / ¥ / ￥ Skills
           // 仍由 MentionPlugin 保留兼容触发，但不在 + 菜单重复展示。
           showMentionButton
           topContent={topContentNode}
@@ -2174,6 +2176,11 @@ function ConversationComposerImpl({
           </p>
         ) : null}
       </div>
+      {contextHeader ? (
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-0 rounded-xl border border-border bg-surface p-1.5">
+          {contextHeader}
+        </div>
+      ) : null}
       <ImagePreviewDialog
         initialIndex={attachmentPreviewIndex}
         items={composerMediaPreviewItems}

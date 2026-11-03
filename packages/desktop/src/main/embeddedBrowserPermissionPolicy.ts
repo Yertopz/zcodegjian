@@ -1,6 +1,9 @@
 // Modified by ZCode: 搬自上游 zai-org/ZCode aac47556 (Apache-2.0)；内置浏览器权限治理(F9),与上游一致,仅随本仓 shared 通道名。
 import type { Session, Streams } from "electron";
-import type { EmbeddedBrowserPermissionDeviceOption } from "@zcode/shared";
+import {
+  DEFAULT_BROWSER_INSTANCE_PARTITION,
+  type EmbeddedBrowserPermissionDeviceOption,
+} from "@zcode/shared";
 import { readDeviceOptions } from "./embeddedBrowserDeviceOptions.js";
 import {
   getEmbeddedBrowserSitePermission,
@@ -69,9 +72,14 @@ export interface EmbeddedBrowserSitePermissionRecord {
   [origin: string]: { [permission: string]: "allow" | "deny" };
 }
 
+/** 持久化结构：partition → origin → permission → 决定。 */
+export interface EmbeddedBrowserSitePermissionStoreRecords {
+  [partition: string]: EmbeddedBrowserSitePermissionRecord;
+}
+
 export interface EmbeddedBrowserSitePermissionStore {
-  load(): Promise<EmbeddedBrowserSitePermissionRecord>;
-  persist(record: EmbeddedBrowserSitePermissionRecord): Promise<void>;
+  load(): Promise<EmbeddedBrowserSitePermissionStoreRecords>;
+  persist(records: EmbeddedBrowserSitePermissionStoreRecords): Promise<void>;
 }
 
 export interface EmbeddedBrowserPermissionLogger {
@@ -94,6 +102,17 @@ export interface EmbeddedBrowserPermissionPolicyOptions {
   ) => Promise<EmbeddedBrowserPermissionPromptAction>;
   /** 持久站点同意记录（Step 2/3）；缺省时决策只依赖内存。 */
   store?: EmbeddedBrowserSitePermissionStore;
+  /**
+   * 是否由本次 apply 初始化全局站点同意记录。默认 true，保持既有默认分区行为。
+   * 多 partition 控制台实例应传 false：记录只允许初始化一次，否则后装配的实例会把
+   * 先装配实例的站点同意记录重置为空。记录本身按 `partition` 分桶，互不影响。
+   */
+  initializeStore?: boolean;
+  /**
+   * 该 Session 对应的 partition；站点同意记录按它隔离。缺省为默认实例 partition，
+   * 保持设置页与迁移前的行为一致。
+   */
+  partition?: string;
   /**
    * 设备选择器（Step 2）注入；返回 session 句柄：result 结算选中的 deviceId
    * （null 取消），updateDevices 在选择器打开期间热更新设备列表（蓝牙扫描 /
@@ -131,13 +150,16 @@ export async function applyEmbeddedBrowserPermissionPolicy(
   options: EmbeddedBrowserPermissionPolicyOptions,
 ): Promise<void> {
   const { logger } = options;
+  const permissionPartition = options.partition ?? DEFAULT_BROWSER_INSTANCE_PARTITION;
 
   // 站点同意记录常驻内存（check handler 需同步读取），由独立管理器负责加载与落盘，
   // 设置页「网站权限」与「清除浏览器数据」也经同一管理器，保证决策口径一致。
-  await initEmbeddedBrowserSitePermissions({
-    ...(options.store ? { store: options.store } : {}),
-    logger,
-  });
+  if (options.initializeStore !== false) {
+    await initEmbeddedBrowserSitePermissions({
+      ...(options.store ? { store: options.store } : {}),
+      logger,
+    });
+  }
 
   const sessionAllow = new Map<string, Set<string>>();
   const inflight = new Map<string, Promise<EmbeddedBrowserPermissionPromptAction>>();
@@ -169,7 +191,11 @@ export async function applyEmbeddedBrowserPermissionPolicy(
     }
 
     if (PROMPT_PERMISSIONS.has(permission)) {
-      const persisted = getEmbeddedBrowserSitePermission(origin, permission);
+      const persisted = getEmbeddedBrowserSitePermission(
+        origin,
+        permission,
+        permissionPartition,
+      );
       if (persisted === "allow" || persisted === "deny") {
         logDecision(persisted === "allow" ? "granted" : "denied", {
           permission,
@@ -216,13 +242,23 @@ export async function applyEmbeddedBrowserPermissionPolicy(
             action,
           });
           if (action === "allow-always") {
-            void writeEmbeddedBrowserSitePermission(origin, permission, "allow");
+            void writeEmbeddedBrowserSitePermission(
+              origin,
+              permission,
+              "allow",
+              permissionPartition,
+            );
           } else if (action === "allow-session") {
             const grantedSet = sessionAllow.get(origin) ?? new Set<string>();
             grantedSet.add(permission);
             sessionAllow.set(origin, grantedSet);
           } else if (action === "block-always") {
-            void writeEmbeddedBrowserSitePermission(origin, permission, "deny");
+            void writeEmbeddedBrowserSitePermission(
+              origin,
+              permission,
+              "deny",
+              permissionPartition,
+            );
           }
           callback(granted);
         },
@@ -249,7 +285,12 @@ export async function applyEmbeddedBrowserPermissionPolicy(
     // select-* 监听独占把关（未选择不授权）。蓝牙不在 check 枚举里，不受影响。
     if (DEVICE_CHECK_PERMISSIONS.has(permission)) return true;
     if (!PROMPT_PERMISSIONS.has(permission)) return false;
-    if (getEmbeddedBrowserSitePermission(requestingOrigin, permission) === "allow") return true;
+    if (
+      getEmbeddedBrowserSitePermission(requestingOrigin, permission, permissionPartition) ===
+      "allow"
+    ) {
+      return true;
+    }
     return sessionAllow.get(requestingOrigin)?.has(permission) === true;
   });
 

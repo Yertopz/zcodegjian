@@ -44,6 +44,7 @@ import type { IBotsService } from "./bots/bots.js";
 
 /** UI 层消费的统一服务接口 */
 export interface IServiceAccessor {
+  readonly serverWorkbenchService?: import("./server-workbench/contract.js").IServerWorkbenchService;
   readonly fileService: IFileService;
   readonly mediaPreviewService?: IMediaPreviewService;
   readonly gitService: IGitService;

@@ -50,8 +50,10 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
   registerBuiltInTools(runtime.registry, {
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
     includeSkill: Boolean(runtime.skillPort),
-    includeAgent: Boolean(runtime.subagentPort),
+    // 子运行时可能只持有受限同伴消息端口；端口存在不代表允许继续派生 Agent。
+    includeAgent: Boolean(runtime.subagentPort) && runtime.config.subagents?.enabled !== false,
     includeSendMessage: runtime.subagentPort?.sendMessage !== undefined,
+    peerMessagesOnly: runtime.config.taskType === "subagent_child",
     includeRespondToCoordinator:
       runtime.config.taskType === "subagent_child" && Boolean(deps.coordinatorResponsePort),
     // submit_result 只在注入了 workflowSubmitPort 的 workflow actor 会话注册。以端口存在为门，

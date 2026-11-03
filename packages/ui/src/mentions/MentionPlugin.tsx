@@ -18,6 +18,7 @@ import {
   KEY_TAB_COMMAND,
 } from "lexical";
 import { useZCodeIntl } from "../i18n/IntlProvider.js";
+import { useSubagents } from "@/hooks/useSubagents.js";
 import {
   extractActivePromptInputTrigger,
   getActivePromptInputTokenTailLength,
@@ -33,6 +34,7 @@ import {
 } from "./components/MentionPanel.js";
 import {
   buildVisibleMentionGroups,
+  filterMentionItemsWithOptions,
   hasMentionQuery,
   MENTION_DEFAULT_GROUP_PREVIEW_LIMIT,
   MENTION_FILES_ONLY_DEFAULT_PREVIEW_LIMIT,
@@ -49,6 +51,7 @@ import { usePluginsMentionProvider } from "./providers/pluginsMentionProvider.js
 import { useSessionsMentionProvider } from "./providers/sessionsMentionProvider.js";
 import { useSkillsMentionProvider } from "./providers/skillsMentionProvider.js";
 import { useWhiteboardMentionProvider } from "./providers/whiteboardMentionProvider.js";
+import { mapSubagentsToMentionItemsForTest } from "./providers/subagentsMentionProvider.js";
 import type { MentionItem } from "./mentionTypes.js";
 import {
   getActivePromptInputTokenReplacementRange,
@@ -164,6 +167,23 @@ export function MentionPlugin({
   const isSessionTrigger = activeTrigger?.trigger === "#";
   const isSkillTrigger = activeTrigger?.trigger === "$";
 
+  // 与 / 面板共用工作区目录和同名优先级；选中只写入草稿，不在 UI 创建运行。
+  const {
+    agents,
+    loading: agentsLoading,
+    error: agentsError,
+  } = useSubagents(workspacePath, provider, workspaceIdentity);
+  const agentItems = useMemo(
+    () =>
+      isOpen && isContextTrigger
+        ? filterMentionItemsWithOptions(
+            mapSubagentsToMentionItemsForTest(agents),
+            deferredActiveQuery,
+          )
+        : [],
+    [agents, deferredActiveQuery, isContextTrigger, isOpen],
+  );
+
   // 修复说明：之前把 @ 面板拆成了两层，导致用户输入 query 后还要再确认一次，
   // 实际感受像“按回车之后才开始搜”。现在改成单层分组面板，query 一变化就直接展示各分组结果。
   const skillsResult = useSkillsMentionProvider(
@@ -221,6 +241,14 @@ export function MentionPlugin({
 
   const panelGroups = useMemo<MentionResultGroup<MentionItem>[]>(() => {
     const groupsById = {
+      subagents: {
+        id: "subagents",
+        title: intl.formatMessage({ id: "chat.mention.subagents.title" }),
+        items: agentItems,
+        loading: agentsLoading,
+        errorText: agentsError,
+        emptyText: intl.formatMessage({ id: "chat.mention.subagents.empty" }),
+      },
       files: {
         id: "files",
         title: fileResult.title,
@@ -263,12 +291,16 @@ export function MentionPlugin({
       },
     } satisfies Record<MentionPanelGroupId, MentionResultGroup<MentionItem>>;
 
-    // 产品约束：@ 固定为 Plugin → 文件 → 对话 → 画板；旧 # / $ 面板继续走
+    // @ 同时发现 Agent、Plugin、文件、对话和画板；旧 # / $ 面板继续走
     // 原单分组 provider。这里仅重排发现入口，候选自身的 canonical markdown 不变。
     return buildVisibleMentionGroups(
       getMentionPanelGroupOrder(activeTrigger?.trigger).map((groupId) => groupsById[groupId]),
     );
   }, [
+    agentItems,
+    agentsError,
+    agentsLoading,
+    intl,
     fileResult.emptyText,
     fileResult.error,
     fileResult.items,

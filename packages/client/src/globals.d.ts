@@ -336,6 +336,71 @@ declare global {
       ): Promise<ChromeBrowserDataImportResult>;
       /** 清理内置浏览器缓存或全部站点数据。 */
       clearEmbeddedBrowserData?(mode: "cache" | "all"): Promise<EmbeddedBrowserDataClearResult>;
+      /**
+       * 浏览器控制台（多实例 / 独立代理 / 网络面板 / AI 控制）。
+       * preload 与 `desktopPlatform.ts` 两处都要映射：少任一处，UI 的能力探测会把桌面端
+       * 也判成"能力缺失"，入口能打开但一建实例就静默失败。
+       */
+      browserConsoleListInstances?(): Promise<import("@zcode/shared").BrowserInstanceRecord[]>;
+      browserConsoleCreateInstance?(
+        input: import("@zcode/shared").BrowserInstanceCreateRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleInstanceMutationResult>;
+      browserConsoleUpdateInstance?(
+        input: import("@zcode/shared").BrowserInstanceUpdateRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleInstanceMutationResult>;
+      browserConsoleDeleteInstance?(
+        input: import("@zcode/shared").BrowserInstanceIdRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleDeleteResult>;
+      browserConsolePrepareGuestAttach?(
+        input: import("@zcode/shared").BrowserConsolePrepareGuestAttachRequest,
+      ): Promise<import("@zcode/shared").BrowserConsolePrepareGuestAttachResult>;
+      browserConsoleClearInstanceData?(
+        input: import("@zcode/shared").BrowserConsoleClearInstanceDataRequest,
+      ): Promise<EmbeddedBrowserDataClearResult>;
+      browserConsoleRegisterTab?(
+        input: import("@zcode/shared").BrowserConsoleTabRegisterRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleTabRegisterResult>;
+      browserConsoleUnregisterTab?(
+        input: import("@zcode/shared").BrowserConsoleTabIdRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleTabUnregisterResult>;
+      browserConsoleNetworkSubscribe?(
+        input: import("@zcode/shared").BrowserNetworkSubscribeRequest,
+      ): Promise<{ ok: boolean }>;
+      browserConsoleNetworkSnapshot?(
+        input: import("@zcode/shared").BrowserNetworkSnapshotRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleNetworkSnapshotResult>;
+      browserConsoleNetworkClear?(
+        input: import("@zcode/shared").BrowserNetworkClearRequest,
+      ): Promise<{ ok: boolean }>;
+      browserConsoleNetworkExportHar?(
+        input: import("@zcode/shared").BrowserNetworkExportHarRequest,
+      ): Promise<import("@zcode/shared").BrowserNetworkHarExportResult>;
+      browserConsoleAcquireDeepCapture?(
+        input: import("@zcode/shared").BrowserNetworkDeepCaptureRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleDeepCaptureResult>;
+      browserConsoleReleaseDeepCapture?(
+        input: import("@zcode/shared").BrowserNetworkDeepCaptureRequest,
+      ): Promise<{ ok: boolean }>;
+      browserConsoleGetResponseBody?(
+        input: import("@zcode/shared").BrowserNetworkResponseBodyRequest,
+      ): Promise<import("@zcode/shared").BrowserNetworkResponseBodyResult>;
+      browserConsoleSetAgentBinding?(
+        input: import("@zcode/shared").BrowserConsoleSetAgentBindingRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleSetAgentBindingResult>;
+      browserConsoleGetAgentBinding?(
+        input: import("@zcode/shared").BrowserConsoleGetAgentBindingRequest,
+      ): Promise<import("@zcode/shared").BrowserConsoleAgentBindingLookup>;
+      onBrowserConsoleNetworkBatch?(
+        handler: (payload: import("@zcode/shared").BrowserNetworkBatchPayload) => void,
+      ): () => void;
+      onBrowserConsoleAgentBindingChanged?(
+        handler: (
+          payload: import("@zcode/shared").BrowserConsoleAgentBindingChangedPayload,
+        ) => void,
+      ): () => void;
+      onBrowserConsoleOpenTab?(
+        handler: (payload: import("@zcode/shared").BrowserConsoleOpenTabPayload) => void,
+      ): () => void;
       /** 注册新版本已下载完毕的回调，返回 disposer */
       onUpdateReady(callback: (version: string) => void): () => void;
       /** 注册"手动检查更新"结果的回调，返回 disposer */

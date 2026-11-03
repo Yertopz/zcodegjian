@@ -172,6 +172,19 @@ export class ContextBuilder {
       // Context Management
       sections.push(buildContextManagementSection());
 
+      // 仅主 Agent 追加角色要求，子 Agent/工作流身份不能继承。
+      if (!isWorkflowActor && this.config.mainAgentPrompt) {
+        sections.push(
+          createSection({
+            name: "Main Agent Prompt",
+            source: "main_agent_prompt",
+            injectionTarget: "system",
+            cacheHint: "dynamic",
+            content: `# Main Agent Prompt: ${this.config.mainAgentPrompt.name}\n${this.config.mainAgentPrompt.prompt}`,
+          }),
+        );
+      }
+
       const gitSystemContextSection = buildGitSystemContextSection(this.config.envInfo);
       if (gitSystemContextSection) {
         sections.push(gitSystemContextSection);

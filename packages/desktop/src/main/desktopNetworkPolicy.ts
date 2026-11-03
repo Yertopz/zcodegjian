@@ -1,9 +1,9 @@
 import { X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { ProxyConfig, Session } from "electron";
-import { EMBEDDED_BROWSER_PARTITION } from "./browserDataManager.js";
+import { DEFAULT_BROWSER_INSTANCE_PARTITION } from "@zcode/shared";
 
-interface DesktopNetworkPolicySettings {
+export interface DesktopNetworkPolicySettings {
   httpProxy?: string;
   httpProxyNoProxy?: string;
   httpProxyCaCertPath?: string;
@@ -24,6 +24,14 @@ interface DesktopSessionNetworkPolicyOptions {
   allowInsecureCertificates?: boolean;
   /** 设置页代理留空时使用的兜底模式，默认 `direct`。 */
   fallbackProxyMode?: ProxyFallbackMode;
+}
+
+export interface DesktopCertificatePolicyOptions {
+  allowInsecureCertificates?: boolean;
+}
+
+export interface DesktopCertificatePolicyLogger {
+  warn: (...args: unknown[]) => void;
 }
 
 interface DesktopNetworkPolicyLogger {
@@ -63,7 +71,7 @@ export async function applyDesktopChromiumNetworkPolicies(
     },
     {
       name: "embedded-browser",
-      session: sessionProvider.fromPartition(EMBEDDED_BROWSER_PARTITION),
+      session: sessionProvider.fromPartition(DEFAULT_BROWSER_INSTANCE_PARTITION),
       // 自签名放行只开在内置浏览器出口：defaultSession 承载 renderer 对 ZCode 后端与模型 API
       // 的流量，在那里放行等于整个应用失去 TLS 保护，与「访问内网测试站点」的诉求不成比例。
       allowInsecure: settings.embeddedBrowserAllowInsecureCertificates === true,
@@ -95,7 +103,7 @@ async function applyDesktopSessionNetworkPolicy(
   logger: DesktopNetworkPolicyLogger,
   options: DesktopSessionNetworkPolicyOptions = {},
 ): Promise<void> {
-  const proxyConfig = buildElectronProxyConfig(
+  const proxyConfig = buildDesktopProxyConfig(
     settings.httpProxy,
     settings.httpProxyNoProxy,
     options.fallbackProxyMode,
@@ -104,9 +112,7 @@ async function applyDesktopSessionNetworkPolicy(
   await targetSession.closeAllConnections();
 
   // 全放行比自定义 CA 更宽松，两者同时配置时按前者生效，避免出现「开了开关仍被拒」的困惑。
-  const verifyProc = options.allowInsecureCertificates
-    ? createInsecureCertificateVerifyProc()
-    : createCustomCaCertificateVerifyProcFromFile(settings.httpProxyCaCertPath, logger);
+  const verifyProc = buildDesktopCertificateVerifyProc(settings, options, logger);
   targetSession.setCertificateVerifyProc(verifyProc);
 
   const bypassState = proxyConfig.proxyBypassRules ? "enabled" : "disabled";
@@ -128,7 +134,18 @@ function createInsecureCertificateVerifyProc(): CertificateVerifyProc {
   };
 }
 
-function buildElectronProxyConfig(
+export function buildDesktopCertificateVerifyProc(
+  settings: DesktopNetworkPolicySettings,
+  options: DesktopCertificatePolicyOptions,
+  logger: DesktopCertificatePolicyLogger,
+): CertificateVerifyProc | null {
+  return options.allowInsecureCertificates
+    ? createInsecureCertificateVerifyProc()
+    : createCustomCaCertificateVerifyProcFromFile(settings.httpProxyCaCertPath, logger);
+}
+
+/** 设置页全局代理的纯构造函数；控制台实例的 `inherit` 模式复用同一口径。 */
+export function buildDesktopProxyConfig(
   httpProxy: string | undefined,
   noProxy?: string | undefined,
   fallbackMode: ProxyFallbackMode = "direct",
@@ -233,7 +250,7 @@ function certificateChainMatchesCustomCa(
   return false;
 }
 
-function normalizeProxyRules(value: string | undefined): string | undefined {
+export function normalizeProxyRules(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
@@ -249,7 +266,7 @@ function normalizeProxyRules(value: string | undefined): string | undefined {
   }
 }
 
-function normalizeProxyBypassRules(value: string | undefined): string | undefined {
+export function normalizeProxyBypassRules(value: string | undefined): string | undefined {
   const tokens = value
     ?.split(",")
     .map((token) => token.trim())

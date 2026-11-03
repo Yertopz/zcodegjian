@@ -46,6 +46,7 @@ export async function startCanonicalIntent(
     envelope,
     {
       kind: editTarget.intent.kind,
+      mainAgentPrompt: editTarget.intent.mainAgentPrompt,
       conversationQuotes:
         envelope.type === "editUserQuery"
           ? ((envelope.payload as CommandPayloadMap["editUserQuery"]).conversationQuotes ??

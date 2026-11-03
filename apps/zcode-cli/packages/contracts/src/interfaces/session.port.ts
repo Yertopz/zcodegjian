@@ -310,6 +310,7 @@ export interface HighspeedMessageMetadata {
 
 /** 协议无关的输入 intent metadata；bootstrap v4 在事件边界组装为 ConversationInputIntent。 */
 export interface TurnInputIntentMetadata {
+  mainAgentPrompt?: import("@zcode/shared").MainAgentPromptSnapshot;
   planEnabled?: boolean;
   // Modified by ZCode:X1。纯引用编辑：编辑后的输入可以只含对话引用而正文为空，intent 必须携带引用快照。
   conversationQuotes?: Array<{

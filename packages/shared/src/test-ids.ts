@@ -680,6 +680,22 @@ export const TID_V4_ROW_ATTACHMENTS = "v4-row-attachments";
 /** Plugin 设置页里进入插件商店的入口按钮（商店是 WorkspaceShell 主视图，不是设置页分区） */
 export const TID_PLUGIN_STORE_BROWSE = "plugin-store-browse";
 
+// 浏览器控制台（多实例 / 独立代理 / 网络与页面面板）
+/** 侧边栏「浏览器」入口 */
+export const TID_BROWSER_CONSOLE_OPEN = "browser-console-open";
+/** 控制台主视图根节点 */
+export const TID_BROWSER_CONSOLE_ROOT = "browser-console";
+/** 实例条新建按钮 */
+export const TID_BROWSER_CONSOLE_CREATE_INSTANCE = "browser-console-create-instance";
+/** 标签条新建按钮 */
+export const TID_BROWSER_CONSOLE_NEW_TAB = "browser-console-new-tab";
+/** 检查器开关 */
+export const TID_BROWSER_CONSOLE_INSPECTOR_TOGGLE = "browser-console-inspector-toggle";
+/** 「AI 控制此浏览器」开关 */
+export const TID_BROWSER_CONSOLE_AI_CONTROL = "browser-console-ai-control";
+/** 网络列表行 */
+export const TID_BROWSER_CONSOLE_NETWORK_ROW = "browser-console-network-row";
+
 // Automations / 定时任务
 export const TID_AUTOMATIONS_OPEN = "automations-open";
 export const TID_AUTOMATIONS_LIST = "automations-list";

@@ -10,7 +10,7 @@ export const SendMessageInputSchema = z
       .string()
       .min(1)
       .max(200)
-      .describe("Recipient: local agent ID returned by Agent (format agent_<uuid>)."),
+      .describe("Recipient: local agent ID (agent_<uuid>); a child can also use an unambiguous running peer's name."),
     summary: z
       .string()
       .min(1)

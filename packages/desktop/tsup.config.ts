@@ -202,7 +202,11 @@ export default defineConfig([
     platform: "node",
     target: "node22",
     external: ["electron"],
-    noExternal: ["@zcode/shared"],
+    noExternal: [
+      "@zcode/shared",
+      // Electron 沙箱 preload 不能运行时解析 npm 包；@zcode/shared 间接使用 zod，必须一起内联。
+      "zod",
+    ],
     outExtension: () => ({ js: ".cjs" }),
     define: createSharedDefines(),
     esbuildOptions(options) {

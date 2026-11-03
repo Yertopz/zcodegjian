@@ -27,6 +27,7 @@ import {
   initEmbeddedBrowserSitePermissions,
   removeEmbeddedBrowserSitePermission,
   removeEmbeddedBrowserSitePermissionOrigin,
+  removeEmbeddedBrowserSitePermissionsForPartition,
   resetEmbeddedBrowserSitePermissionsForTest,
   writeEmbeddedBrowserSitePermission,
 } from "../src/main/embeddedBrowserSitePermissions.js";
@@ -167,12 +168,15 @@ test("store:persist 原子写,坏 JSON/形状降级为空", async () => {
   const dir = await mkdtemp(join(tmpdir(), "zcode-f9-store-"));
   const filePath = join(dir, "site.json");
   const store = createEmbeddedBrowserSitePermissionStore(filePath);
-  await store.persist({ "https://a.example": { camera: "allow" } });
+  const records = {
+    "persist:zcode-embedded-browser": { "https://a.example": { camera: "allow" as const } },
+  };
+  await store.persist(records);
   const raw = await readFile(filePath, "utf8");
   assert.ok(raw.includes("https://a.example"));
 
   const store2 = createEmbeddedBrowserSitePermissionStore(filePath);
-  assert.deepEqual(await store2.load(), { "https://a.example": { camera: "allow" } });
+  assert.deepEqual(await store2.load(), records);
 
   await writeFile(filePath, "{ broken json");
   assert.deepEqual(await store2.load(), {});
@@ -181,6 +185,17 @@ test("store:persist 原子写,坏 JSON/形状降级为空", async () => {
   await writeFile(filePath, JSON.stringify({ origin: { perm: "bogus" } }));
   assert.deepEqual(await store2.load(), {});
 
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("store:旧扁平结构迁移到默认实例 partition", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "zcode-f9-store-legacy-"));
+  const filePath = join(dir, "site.json");
+  await writeFile(filePath, JSON.stringify({ "https://legacy.example": { camera: "deny" } }));
+  const store = createEmbeddedBrowserSitePermissionStore(filePath);
+  assert.deepEqual(await store.load(), {
+    "persist:zcode-embedded-browser": { "https://legacy.example": { camera: "deny" } },
+  });
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -212,6 +227,22 @@ test("sitePermissions:ask 删条目,origin 重置与全清", async () => {
   await writeEmbeddedBrowserSitePermission("https://b.example", "midi", "deny");
   await clearEmbeddedBrowserSitePermissions();
   assert.deepEqual(getEmbeddedBrowserSitePermissionSnapshot(), {});
+});
+
+test("sitePermissions:按 partition 隔离且可整段清理", async () => {
+  const logger = createFakeLogger();
+  await initEmbeddedBrowserSitePermissions({ logger });
+  const partitionA = "persist:zcode-browser-inst-a";
+  await writeEmbeddedBrowserSitePermission("https://a.example", "camera", "allow", partitionA);
+  assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "camera"), undefined);
+  assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "camera", partitionA), "allow");
+  assert.equal(
+    getEmbeddedBrowserSitePermission("https://a.example", "camera", "persist:zcode-browser-inst-b"),
+    undefined,
+  );
+  await removeEmbeddedBrowserSitePermissionsForPartition(partitionA);
+  assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "camera", partitionA), undefined);
+  resetEmbeddedBrowserSitePermissionsForTest();
 });
 
 test("sitePermissions:store 不可用时内存层照常,失败只 warn", async () => {
@@ -408,6 +439,27 @@ test("policy:onDisplayMediaRequest 转发源选择", async () => {
   });
   assert.equal(bridgeCalled, true);
   assert.deepEqual(result, { video: { id: "screen:0:0" } });
+});
+
+test("policy:initializeStore=false 复用已加载的全局站点同意记录", async () => {
+  const logger = createFakeLogger();
+  initEmbeddedBrowserSitePermissions({ logger });
+  await writeEmbeddedBrowserSitePermission("https://a.example", "media", "allow");
+  const fakeSession = createFakeSession();
+  await applyEmbeddedBrowserPermissionPolicy(fakeSession as never, {
+    logger,
+    initializeStore: false,
+  });
+  assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "media"), "allow");
+  const granted = await new Promise<boolean>((resolve) => {
+    fakeSession.requestHandler(
+      { id: 1, hostWebContents: { id: 9 } },
+      "media",
+      resolve,
+      { requestingUrl: "https://a.example/page" },
+    );
+  });
+  assert.equal(granted, true);
 });
 
 test("bluetoothGuard:无选择器时回调空串(取消),不静默授权", () => {

@@ -42,6 +42,7 @@ import {
   type WorkspaceId,
 } from "@zcode/contracts";
 import {
+  resolveMainAgentPrompt,
   DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
   ZCODE_SESSION_RUNTIME_PREFERENCES_REQUEST_TIMEOUT_MS,
   zcodeProtocolErrorCodes,
@@ -1958,6 +1959,20 @@ export async function sendPrompt(context: ZCodeProtocolAgentServerContext, rawPa
     // 才把它提升为普通 session，让后续 list/syncer/task index 按真实任务处理。
     record.persistence = "immediate";
   }
+  // legacy 附件入口也在 admission 前冻结正文；后台启动后不再读取可变设置。
+  const mainPromptId = record.app.runtime.getMainAgentPromptId?.();
+  const mainAgentPrompt = mainPromptId
+    ? resolveMainAgentPrompt(
+        (
+          await requestSessionRuntimePreferences(
+            context,
+            record.app.sessionId,
+            "main-agent-prompts",
+          )
+        ).mainAgentPrompts,
+        mainPromptId,
+      )
+    : null;
   const abortController = new AbortController();
   record.activeAbortController = abortController;
   context.logger?.info("ZCode Protocol session/send accepted", {
@@ -1968,11 +1983,12 @@ export async function sendPrompt(context: ZCodeProtocolAgentServerContext, rawPa
     textLength: params.content.length,
     workspacePath: record.workspace.workspacePath,
   });
-  const inputId = params.inputId ?? (params.modelSelection ? crypto.randomUUID() : undefined);
+  const inputId =
+    params.inputId ?? (params.modelSelection || mainAgentPrompt ? crypto.randomUUID() : undefined);
   // 旧附件载荷也经同一个 canonical intent 固定本次选择，不先改 Session。这里只借用
   // 公共 metadata 构造器（非 V4 ACK/重放入口）；无 V4 admission 的序号沿既有值 0。
   const intent =
-    params.modelSelection && inputId
+    (params.modelSelection || mainAgentPrompt) && inputId
       ? inputIntentMetadata(
           {
             commandId: inputId,
@@ -1986,6 +2002,7 @@ export async function sendPrompt(context: ZCodeProtocolAgentServerContext, rawPa
             text: params.content,
             requestedDelivery: "startNow",
             modelSelection: params.modelSelection,
+            mainAgentPrompt,
           },
         )
       : undefined;
@@ -3219,7 +3236,7 @@ function resolveProtocolBashShellSelection(
   }).selection;
 }
 
-async function requestSessionRuntimePreferences(
+export async function requestSessionRuntimePreferences(
   context: ZCodeProtocolAgentServerContext,
   sessionId: SessionId,
   scope: ZCodeSessionRuntimePreferencesScope,
@@ -3523,6 +3540,19 @@ async function createRecord(
   };
   // 绑定归属会话，供 automation-port 读取本会话实时 model/mode/thought。
   ownSessionRecord = record;
+  if (!resume && !parentSessionId) {
+    const preferences = await requestSessionRuntimePreferences(
+      context,
+      sessionId,
+      "main-agent-prompts",
+      trace,
+    );
+    const library = preferences.mainAgentPrompts;
+    const id = library?.prompts.some((item) => item.id === library.defaultId)
+      ? library.defaultId
+      : null;
+    if (id) await app.runtime.setMainAgentPrompt({ id, traceContext });
+  }
   return record;
 }
 

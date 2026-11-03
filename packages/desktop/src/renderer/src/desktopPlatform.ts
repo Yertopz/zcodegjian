@@ -1,6 +1,7 @@
 import { DesktopCommandIds, buildLocalMediaPreviewUrl, type IPlatformService } from "@zcode/shared";
 
 import { desktopBrowserPlatformBridge } from "./desktopBrowserPlatformBridge.js";
+import { createDesktopBrowserConsolePlatformBridge } from "./desktopBrowserConsolePlatformBridge.js";
 // F5(上游 aac47556):插件 UI 沙箱平台端口,供 plugin-ui 层做能力探测。
 import { createDesktopPluginSandboxPlatform } from "./plugin-sandbox/desktopPluginSandboxPlatform.js";
 
@@ -106,6 +107,9 @@ export function createDesktopPlatform(options: {
     browserViewScreenshotSurfaceReady: (payload) =>
       window.zcode.browserViewScreenshotSurfaceReady?.(payload),
     ...desktopBrowserPlatformBridge,
+    // 浏览器控制台（多实例 / 网络 / AI 控制）同样需要在这里映射；漏掉时 UI 的能力探测
+    // 恒判成缺失，入口能打开但一建实例就报“创建实例失败”（实测）。
+    ...createDesktopBrowserConsolePlatformBridge(),
     onNewTask: (handler) => window.zcode.onNewTask(handler),
     onOpenWorkspace: (handler) => {
       // 开发态或升级后的旧窗口可能仍运行未暴露 onOpenWorkspace 的 preload，

@@ -19,6 +19,7 @@ import {
   Cloud,
   Folder,
   FolderOpen,
+  Globe,
   Hash,
   ListFilter,
   Maximize2,
@@ -52,6 +53,7 @@ import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
   TID_AUTOMATIONS_OPEN,
+  TID_BROWSER_CONSOLE_OPEN,
   TID_PROJECT_ADD,
   TID_PROJECT_SECTION,
   TID_SIDEBAR,
@@ -271,8 +273,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenCommandCenter,
   onOpenAutomations,
   onOpenPluginStore,
+  onOpenBrowser,
   automationsActive = false,
   pluginStoreActive = false,
+  browserActive = false,
+  serverWorkbenchEntry,
   onFileTreeOpenChange,
 }: {
   workspacePath: string;
@@ -323,8 +328,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenCommandCenter: () => void;
   onOpenAutomations?: () => void;
   onOpenPluginStore?: () => void;
+  onOpenBrowser?: () => void;
   automationsActive?: boolean;
   pluginStoreActive?: boolean;
+  browserActive?: boolean;
+  serverWorkbenchEntry?: ReactNode;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
@@ -847,6 +855,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const handleOpenAutomationsMain = useCallback(() => {
     onOpenAutomations?.();
   }, [onOpenAutomations]);
+  const handleOpenBrowserMain = useCallback(() => {
+    onOpenBrowser?.();
+  }, [onOpenBrowser]);
   const handleOpenCodingPlanUpgrade = useCallback(
     (
       providerId: string,
@@ -1441,6 +1452,24 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               <Blocks className="size-4" />
               {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
             </Button>
+            {isDesktop ? (
+              <Button
+                variant="ghost"
+                onClick={handleOpenBrowserMain}
+                data-icon="inline-start"
+                data-testid={TID_BROWSER_CONSOLE_OPEN}
+                size="lg"
+                aria-pressed={browserActive}
+                className={cn(
+                  "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
+                  browserActive && "bg-selected text-foreground",
+                )}
+              >
+                <Globe className="size-4" />
+                {intl.formatMessage({ id: "browserConsole.entry" })}
+              </Button>
+            ) : null}
+            {isDesktop ? serverWorkbenchEntry : null}
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col">

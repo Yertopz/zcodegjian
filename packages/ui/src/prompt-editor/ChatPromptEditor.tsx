@@ -344,7 +344,7 @@ export function ChatPromptEditor({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-input-border bg-input p-3 transition-colors hover:border-input-border-hover focus-within:!border-input-border-focused focus-within:bg-input-focused",
+          "relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-input-border bg-input p-4 transition-colors hover:border-input-border-hover focus-within:bg-input-focused",
           (isWorkspaceFileDropActive || isExternalFileDropActive) &&
             "border-brand bg-input-focused ring-1 ring-brand/30",
           shellClassName,

@@ -47,6 +47,10 @@ import type {
 } from "@/settings/saved-workflows/SavedWorkflowsSection.js";
 import { AutomationsMainBreadcrumbFrame } from "@/settings/AutomationsMainBreadcrumbFrame.js";
 import { PluginStorePage } from "@/settings/PluginStorePage.js";
+import { BrowserConsoleView } from "@/browser-console/BrowserConsoleView.js";
+import { ServerWorkbenchView } from "@/server-workbench/ServerWorkbenchView.js";
+import { ServerSidebarEntry } from "@/server-workbench/ServerSidebarEntry.js";
+import { useServerWorkbench } from "@/server-workbench/useServerWorkbench.js";
 import { TaskFindDialog } from "@/quickpick/TaskFindDialog.js";
 import { WorkspaceHeader } from "@/WorkspaceHeader.js";
 import { WorkspaceSidebar, type SidebarFileTreeOpenRequest } from "@/WorkspaceSidebar.js";
@@ -373,6 +377,16 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const { intl } = useZCodeIntl();
   const isOfficeMode = useIsOfficeMode();
   const baseServices = useBaseWorkspaceServices();
+  const serverWorkbench = useServerWorkbench(
+    baseServices.serverWorkbenchService,
+    Boolean(isDesktop),
+  );
+  const [serverWorkbenchMounted, setServerWorkbenchMounted] = useState(
+    workspaceMainView === "servers",
+  );
+  useEffect(() => {
+    if (workspaceMainView === "servers") setServerWorkbenchMounted(true);
+  }, [workspaceMainView]);
   const tabStoreApi = useTabStoreApi();
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   // Windows/Linux 也需要外层留白，避免独立面板贴住窗口边缘；桌面统一使用 4px 间距。
@@ -926,9 +940,25 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const showChatMainView = useCallback(() => {
     onWorkspaceMainViewChange("chat");
   }, [onWorkspaceMainViewChange]);
+  // 浏览器主视图第一次打开后保持挂载（隐藏而不卸载）：切回对话时 guest 继续驻留，
+  // AI 才能继续操作页面；条件卸载会同时销毁页面状态与控制权。
+  const [browserConsoleMounted, setBrowserConsoleMounted] = useState(
+    workspaceMainView === "browser",
+  );
+  useEffect(() => {
+    if (workspaceMainView === "browser") setBrowserConsoleMounted(true);
+  }, [workspaceMainView]);
   const primaryNavigationBack =
-    workspaceMainView === "plugin-store" ? handleManageInstalledPlugins : handleTaskNavBack;
-  const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
+    workspaceMainView === "plugin-store"
+      ? handleManageInstalledPlugins
+      : workspaceMainView === "browser" || workspaceMainView === "servers"
+        ? showChatMainView
+        : handleTaskNavBack;
+  const canPrimaryNavigationBack =
+    workspaceMainView === "plugin-store" ||
+    workspaceMainView === "browser" ||
+    workspaceMainView === "servers" ||
+    canTaskNavBack;
   const handleCreateTaskInChat = useCallback(
     (request?: Parameters<typeof onCreateTask>[0]) => {
       // workspaceReadOnlyReason 判定的是活动 workspace；当 request 显式带 targetWorkspace 时
@@ -1601,7 +1631,10 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   // 与 Task Header 分叉。桌面端统一复用 WorkspaceHeader，只由 variant 裁剪 task 专属内容；
   // 手机远控无 active task 时仍不渲染桌面 chrome，继续遵守 replayable overlay 边界。
   const shouldRenderMainViewHeader =
-    workspaceMainView !== "automations" && workspaceMainView !== "plugin-store";
+    workspaceMainView !== "automations" &&
+    workspaceMainView !== "plugin-store" &&
+    workspaceMainView !== "browser" &&
+    workspaceMainView !== "servers";
   const shouldRenderWorkspaceHeader =
     shouldRenderMainViewHeader && (activeTaskId !== null || isDesktop);
   // ErrorBoundary resetKeys 的数组如果每次 render 都重新创建，
@@ -1709,6 +1742,15 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     automationsActive={workspaceMainView === "automations"}
                     onOpenPluginStore={handleOpenPluginStore}
                     pluginStoreActive={workspaceMainView === "plugin-store"}
+                    onOpenBrowser={() => onWorkspaceMainViewChange("browser")}
+                    browserActive={workspaceMainView === "browser"}
+                    serverWorkbenchEntry={
+                      <ServerSidebarEntry
+                        controller={serverWorkbench}
+                        active={workspaceMainView === "servers"}
+                        onOpen={() => onWorkspaceMainViewChange("servers")}
+                      />
+                    }
                     onFileTreeOpenChange={setIsSidebarFileTreeOpen}
                   />
                 </WorkflowRunOpenProvider>
@@ -1859,7 +1901,42 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                       </ScopedErrorBoundary>
                     ) : null}
                     <div className="min-h-0 flex-1 overflow-hidden">
-                      {workspaceMainView === "automations" ? (
+                      {browserConsoleMounted ? (
+                        <div
+                          className={cn(
+                            "h-full min-h-0",
+                            workspaceMainView === "browser" ? "flex flex-col" : "hidden",
+                          )}
+                          data-browser-console-host="true"
+                        >
+                          <BrowserConsoleView
+                            showWindowControls={usesInlineWindowControls && !isSidePaneVisible}
+                            workspaceKey={workspaceKey}
+                            sessionId={activeTaskId ?? null}
+                            isVisible={workspaceMainView === "browser" && isWorkspaceVisible}
+                            isDesktop={Boolean(isDesktop)}
+                            isRemoteWorkspace={Boolean(workspaceRemoteSessionId)}
+                          />
+                        </div>
+                      ) : null}
+                      {serverWorkbenchMounted ? (
+                        <div
+                          className={
+                            workspaceMainView === "servers"
+                              ? "flex h-full min-h-0 flex-col"
+                              : "hidden"
+                          }
+                        >
+                          <ServerWorkbenchView
+                            showWindowControls={usesInlineWindowControls && !isSidePaneVisible}
+                            controller={serverWorkbench}
+                            visible={workspaceMainView === "servers" && isWorkspaceVisible}
+                          />
+                        </div>
+                      ) : null}
+                      {workspaceMainView === "browser" ||
+                      workspaceMainView === "servers" ? null : workspaceMainView ===
+                        "automations" ? (
                         <main
                           id={AUTOMATIONS_TOAST_ANCHOR_ID}
                           className="flex h-full min-h-0 flex-1 flex-col bg-background"
@@ -2023,7 +2100,10 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     </div>
                   </section>
                 </ResizablePanel>
-                {workspaceMainView !== "automations" && workspaceMainView !== "plugin-store" ? (
+                {workspaceMainView !== "automations" &&
+                workspaceMainView !== "plugin-store" &&
+                workspaceMainView !== "browser" &&
+                workspaceMainView !== "servers" ? (
                   <AnimatedTerminalPanel
                     frameClassName={cn(
                       isSidePaneVisible

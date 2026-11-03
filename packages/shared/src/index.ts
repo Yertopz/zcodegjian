@@ -296,6 +296,7 @@ export * from "./skill-scan-policy.js";
 // docs/development/official-diff.md 与 third-party/copied-components.json。
 export * from "./bots.js";
 export * from "./browser-use/index.js";
+export * from "./browser-console/index.js";
 
 export * from "./coding-plan-reset.js";
 export {
@@ -328,3 +329,6 @@ export * from "./subagent-runtime-config.js";
 export * from "./subagent-profile.js";
 export * from "./toolSearch.js";
 export { redactFeedbackText } from "./feedbackPrivacy.js";
+export * from "./server-workbench.js";
+
+export * from "./main-agent-prompts.js";

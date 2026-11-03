@@ -230,6 +230,7 @@ function hookExecutionDisplayName(
 export interface SessionConfigSeed {
   permissionGrant?: { interactionId: string };
   planEnabled?: boolean;
+  mainAgentPromptId?: string | null;
   modelSelection?: ModelSelectedPayload["modelSelection"];
   provider?: string;
   model?: string;
@@ -314,6 +315,7 @@ export interface ConversationEditTarget {
     requestedDelivery?: "auto" | "startNow" | "queue" | "guide";
     admittedDelivery?: "startNow" | "queue" | "guide";
     fallbackReasonCode?: string;
+    mainAgentPrompt?: TurnInputIntentMetadata["mainAgentPrompt"];
     modelSelection?: TurnInputIntentMetadata["modelSelection"];
     mode?: TurnInputIntentMetadata["mode"];
     planEnabled?: boolean;
@@ -557,6 +559,10 @@ export class ProductProjection {
   seedConfig(seed: SessionConfigSeed): void {
     const config = { ...this.snapshot.config };
     let changed = false;
+    if (seed.mainAgentPromptId !== undefined && config.mainAgentPromptId === undefined) {
+      config.mainAgentPromptId = seed.mainAgentPromptId;
+      changed = true;
+    }
     if (!config.permissionGrant && seed.permissionGrant) {
       config.permissionGrant = seed.permissionGrant;
       changed = true;
@@ -1357,6 +1363,15 @@ export class ProductProjection {
         return this.onStreamRecoveryTailDiscarded(event);
       case SessionEventType.StreamRecoveryRetryStarted:
         return this.onStreamRecoveryRetryStarted(event);
+      case SessionEventType.MainAgentPromptSelected: {
+        const { id } = event.payload as { id: string | null };
+        return [
+          {
+            op: "state.updated",
+            patch: { config: { ...this.snapshot.config, mainAgentPromptId: id } },
+          },
+        ];
+      }
       case SessionEventType.ModelSelected:
         return this.onModelSelected(event);
       case SessionEventType.ModelComplete:
@@ -2071,6 +2086,7 @@ export class ProductProjection {
                 ...(fact.fallbackReasonCode ? { fallbackReasonCode: fact.fallbackReasonCode } : {}),
                 ...(fact.modelSelection ? { modelSelection: fact.modelSelection } : {}),
                 ...(fact.mode ? { mode: fact.mode } : {}),
+                mainAgentPrompt: fact.mainAgentPrompt ?? null,
                 ...(fact.planEnabled !== undefined ? { planEnabled: fact.planEnabled } : {}),
                 ...(fact.provenance ? { provenance: fact.provenance } : {}),
               },
@@ -3377,6 +3393,7 @@ export class ProductProjection {
       // 旧的正文编辑事件可能没有 intent，只能保留同项原事实，不能读取当前 Session 补值。
       modelSelection: payload.intent?.modelSelection ?? existing?.modelSelection,
       mode: payload.intent?.mode ?? existing?.mode,
+      mainAgentPrompt: payload.intent?.mainAgentPrompt ?? existing?.mainAgentPrompt ?? null,
       planEnabled: payload.intent?.planEnabled ?? existing?.planEnabled,
       sharedContextRefs: payload.intent?.sharedContextRefs ?? existing?.sharedContextRefs,
       provenance: payload.intent?.provenance ?? existing?.provenance,
@@ -3510,6 +3527,7 @@ export class ProductProjection {
           text: queueItem.text,
           ...(queueItem.modelSelection ? { modelSelection: queueItem.modelSelection } : {}),
           ...(queueItem.mode ? { mode: queueItem.mode } : {}),
+          mainAgentPrompt: queueItem.mainAgentPrompt ?? null,
           ...(queueItem.planEnabled !== undefined ? { planEnabled: queueItem.planEnabled } : {}),
           admissionSeq: queueItem.order.admissionSeq,
           admittedAt: queueItem.admittedAt,
@@ -3602,6 +3620,7 @@ export class ProductProjection {
                   ? { modelSelection: item.intent.modelSelection }
                   : {}),
                 ...(item.intent?.mode ? { mode: item.intent.mode } : {}),
+                mainAgentPrompt: item.intent?.mainAgentPrompt ?? null,
                 ...(item.intent?.planEnabled !== undefined
                   ? { planEnabled: item.intent.planEnabled }
                   : {}),

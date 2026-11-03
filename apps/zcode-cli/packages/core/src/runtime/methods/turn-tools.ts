@@ -570,4 +570,3 @@ function withModelCallWrapper(
   if (!wrapper) return metadata;
   return { ...metadata, modelCallWrapper: wrapper };
 }
-
