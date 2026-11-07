@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -123,6 +124,30 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+/**
+ * 登录写盘前会真连一次代理端口（`probeProxyReachability`），所以用例不能写死
+ * `127.0.0.1:1080`：那要求开发机恰好开着本地代理，CI 上必然 ECONNREFUSED。
+ * 这里起一个只接受连接、不握手的临时监听，端口由系统分配。
+ */
+async function startReachableProxy(t: {
+  after: (fn: () => Promise<void>) => void;
+}): Promise<number> {
+  const server = createServer((socket) => socket.destroy());
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(
+    () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      }),
+  );
+  const address = server.address();
+  assert.ok(address && typeof address === "object", "临时代理端口必须拿到");
+  return address.port;
+}
+
 function readCodexRule(repository: NodePersonalProviderConfigRepository) {
   return repository.read().then((snapshot) => {
     const rule = snapshot.providers.getRule(CODEX_PROVIDER_ID);
@@ -133,12 +158,13 @@ function readCodexRule(repository: NodePersonalProviderConfigRepository) {
 
 test("Codex 登录写入的连接把模型请求固定在该代理上", async (t) => {
   const fixture = await createCodexFixture(t);
+  const proxyPort = await startReachableProxy(t);
   const result = await applyCodexConnection({
     repository: fixture.repository,
     env: {},
     authFilePath: fixture.authFilePath,
     cacheFilePath: fixture.cacheFilePath,
-    proxyUrl: "socks5h://codex:s3cret@127.0.0.1:1080",
+    proxyUrl: `socks5h://codex:s3cret@127.0.0.1:${proxyPort}`,
   });
 
   assert.equal(result.providerId, CODEX_PROVIDER_ID);
@@ -149,7 +175,7 @@ test("Codex 登录写入的连接把模型请求固定在该代理上", async (t
   assert.deepEqual(result.network, {
     type: "socks5h",
     host: "127.0.0.1",
-    port: 1080,
+    port: proxyPort,
     username: "codex",
     password: "s3cret",
   });
@@ -192,18 +218,19 @@ test("Codex 登录写入的连接把模型请求固定在该代理上", async (t
 
 test("重登不传代理时清掉旧代理", async (t) => {
   const fixture = await createCodexFixture(t);
+  const proxyPort = await startReachableProxy(t);
   const base = {
     repository: fixture.repository,
     env: {},
     authFilePath: fixture.authFilePath,
     cacheFilePath: fixture.cacheFilePath,
   };
-  await applyCodexConnection({ ...base, proxyUrl: "127.0.0.1:1080" });
+  await applyCodexConnection({ ...base, proxyUrl: `127.0.0.1:${proxyPort}` });
   const withProxy = await readCodexRule(fixture.repository);
   assert.deepEqual(withProxy.rule.config.network, {
     type: "socks5h",
     host: "127.0.0.1",
-    port: 1080,
+    port: proxyPort,
   });
 
   const relogin = await applyCodexConnection(base);
@@ -237,6 +264,7 @@ test("代理地址解析覆盖 sk5 常见写法", () => {
 
 test("桌面端 loginCodex：写配置后刷新设置视图", async (t) => {
   const fixture = await createCodexFixture(t);
+  const proxyPort = await startReachableProxy(t);
   const previousCodexHome = process.env.CODEX_HOME;
   // createCodexLogin 把 process.env 交给共享实现，模型缓存按 CODEX_HOME 解析。
   process.env.CODEX_HOME = fixture.root;
@@ -270,7 +298,7 @@ test("桌面端 loginCodex：写配置后刷新设置视图", async (t) => {
   const result = await service.loginCodex({
     authFilePath: fixture.authFilePath,
     modelId: CODEX_SECOND_MODEL_ID,
-    proxyUrl: "socks5://127.0.0.1:1080",
+    proxyUrl: `socks5://127.0.0.1:${proxyPort}`,
   });
 
   assert.equal(result.providerId, CODEX_PROVIDER_ID);
@@ -278,7 +306,7 @@ test("桌面端 loginCodex：写配置后刷新设置视图", async (t) => {
   assert.equal(result.view, view);
   assert.deepEqual(refreshReasons, ["codex-login"]);
   const { snapshot, rule } = await readCodexRule(fixture.repository);
-  assert.deepEqual(rule.config.network, { type: "socks5", host: "127.0.0.1", port: 1080 });
+  assert.deepEqual(rule.config.network, { type: "socks5", host: "127.0.0.1", port: proxyPort });
   assert.deepEqual(snapshot.defaultModelSelection, {
     providerId: CODEX_PROVIDER_ID,
     modelId: CODEX_SECOND_MODEL_ID,

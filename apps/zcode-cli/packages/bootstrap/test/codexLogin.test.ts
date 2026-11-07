@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -64,6 +65,30 @@ async function createCodexFixture(
       ZCODE_PERSONAL_PROVIDER_CONFIG_FILE: configPath,
     },
   };
+}
+
+/**
+ * 登录写盘前会真连一次代理端口，用例不能写死 `127.0.0.1:1080`：那要求开发机
+ * 恰好开着本地代理，CI 上必然 ECONNREFUSED。这里起一个只接受连接、不握手的
+ * 临时监听，端口交给系统分配。
+ */
+async function startReachableProxy(t: {
+  after: (fn: () => Promise<void>) => void;
+}): Promise<number> {
+  const server = createServer((socket) => socket.destroy());
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(
+    () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      }),
+  );
+  const address = server.address();
+  assert.ok(address && typeof address === "object", "临时代理端口必须拿到");
+  return address.port;
 }
 
 function chatgptAuth(): unknown {
@@ -247,9 +272,10 @@ test("Codex 模型目录：缺失回落到内置快照，空目录不回落到�
 
 test("zcode login codex：一次写入 Provider 规则、模型属性与默认选择", async (t) => {
   const fixture = await createCodexFixture(t);
+  const proxyPort = await startReachableProxy(t);
   const result = await loginCodexCli({
     env: fixture.env,
-    proxyUrl: "socks5h://127.0.0.1:1080",
+    proxyUrl: `socks5h://127.0.0.1:${proxyPort}`,
   });
 
   assert.equal(result.providerId, CODEX_PROVIDER_ID);
@@ -257,7 +283,7 @@ test("zcode login codex：一次写入 Provider 规则、模型属性与默认�
   assert.equal(result.mainModel, `${CODEX_PROVIDER_ID}/gpt-6.1-sol`);
   assert.equal(result.configPath, fixture.configPath);
   assert.deepEqual(result.modelIds, ["gpt-6.1-sol", "gpt-6-luna"]);
-  assert.deepEqual(result.network, { type: "socks5h", host: "127.0.0.1", port: 1080 });
+  assert.deepEqual(result.network, { type: "socks5h", host: "127.0.0.1", port: proxyPort });
 
   const file = await readJson(fixture.configPath);
   assert.equal(file.schemaVersion, 1);
@@ -271,7 +297,7 @@ test("zcode login codex：一次写入 Provider 规则、模型属性与默认�
     headers: { "chatgpt-account-id": ACCOUNT_ID, originator: "codex_cli_rs" },
   });
   assert.deepEqual(codexRule.config.access, { type: "api-key", apiKey: ACCESS_TOKEN });
-  assert.deepEqual(codexRule.config.network, { type: "socks5h", host: "127.0.0.1", port: 1080 });
+  assert.deepEqual(codexRule.config.network, { type: "socks5h", host: "127.0.0.1", port: proxyPort });
   assert.deepEqual(codexRule.config.personalModelIds, ["gpt-6.1-sol", "gpt-6-luna"]);
   assert.deepEqual(codexRule.config.modelOrder, ["gpt-6.1-sol", "gpt-6-luna"]);
   assert.equal(codexRule.config.group, "standard-personal");
@@ -296,14 +322,15 @@ test("zcode login codex：一次写入 Provider 规则、模型属性与默认�
 
 test("zcode login codex：不给 --proxy 时清掉旧代理，回落到全局网络设置", async (t) => {
   const fixture = await createCodexFixture(t);
+  const proxyPort = await startReachableProxy(t);
   const first = await loginCodexCli({
     env: fixture.env,
-    proxyUrl: "socks5://user:pass@127.0.0.1:1080",
+    proxyUrl: `socks5://user:pass@127.0.0.1:${proxyPort}`,
   });
   assert.deepEqual(first.network, {
     type: "socks5",
     host: "127.0.0.1",
-    port: 1080,
+    port: proxyPort,
     username: "user",
     password: "pass",
   });

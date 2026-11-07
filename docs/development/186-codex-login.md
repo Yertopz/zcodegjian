@@ -168,3 +168,5 @@ AiSdkModelExecution
 | `auth.json` 的 `null` 值凭据可读、API Key 登录态与缺 `account_id` 仍拒绝、代理解析与解码、代理端口探测成功与失败 | `packages/provider-node/test/codexLogin.test.ts`                                                         | 6      |
 
 `packages/provider-node` 已登记进 `scripts/run-tests.mjs` 的 `TEST_PACKAGES`：该包没有 `test` 脚本，不登记则上面 6 条断言不会进 `pnpm test`。运行方式：`cd packages/ui && node --import tsx --test test/settingsCodexLoginEntry.test.ts`（其余同构）。
+
+凡是「登录成功」类的用例，代理端口必须真的有人监听（见场景 22）：写死 `127.0.0.1:1080` 只在「开发机恰好开着本地代理」时成立，CI 上必然 `ECONNREFUSED`。`packages/services/test/codexLogin.test.ts` 与 `apps/zcode-cli/packages/bootstrap/test/codexLogin.test.ts` 各自用 `startReachableProxy()` 起一个 `listen(0)` 的临时监听（只接受连接、不做 SOCKS5 握手），断言里使用它分配的端口。
