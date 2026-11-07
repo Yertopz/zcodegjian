@@ -145,9 +145,7 @@ async function renderRail(props: {
 test("DOM：面板把头像、名字、简介、状态都渲染出来", async () => {
   const members = buildGroupChatMemberRoster({
     agents: TEAM,
-    running: [
-      { childSessionId: "child-1", subagentType: "frontend-auditor", status: "running" },
-    ],
+    running: [{ childSessionId: "child-1", subagentType: "frontend-auditor", status: "running" }],
   });
   const html = await renderRail({ members, onOpenMember: () => {} });
   assert.ok(html.includes("chat-group-chat-member-rail"), "面板根节点必须进 DOM");
@@ -169,7 +167,9 @@ test("DOM：没有 childSessionId 的成员不可点（不隐式建会话）", a
   const members = buildGroupChatMemberRoster({ agents: TEAM, running: [] });
   const html = await renderRail({ members, onOpenMember: () => {} });
   assert.equal(
-    html.includes("<button type=\"button\" data-testid=\"chat-group-chat-member-rail-item-frontend-auditor\""),
+    html.includes(
+      '<button type="button" data-testid="chat-group-chat-member-rail-item-frontend-auditor"',
+    ),
     false,
     "无运行会话的成员必须是静态行，不能渲染成点击入口",
   );

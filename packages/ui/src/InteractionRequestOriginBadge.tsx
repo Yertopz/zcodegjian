@@ -17,21 +17,23 @@ export function InteractionRequestOriginBadge({
   const isTeamMember = useSubagentsStore((state) =>
     Boolean(
       origin?.agentType &&
-        state.agents.some(
-          (agent) => agent.kind === "team" && agent.name === origin.agentType,
-        ),
+      state.agents.some((agent) => agent.kind === "team" && agent.name === origin.agentType),
     ),
   );
   if (origin?.kind !== "subagent") {
     return null;
   }
 
-  const labelId = isTeamMember ? "chat.interactionOrigin.teamMember" : "chat.interactionOrigin.subagent";
+  const labelId = isTeamMember
+    ? "chat.interactionOrigin.teamMember"
+    : "chat.interactionOrigin.subagent";
   const titleId = isTeamMember
     ? "chat.interactionOrigin.teamMember.title"
     : "chat.interactionOrigin.subagent.title";
   const label = intl.formatMessage({ id: labelId });
-  const title = origin.agentType ? intl.formatMessage({ id: titleId }, { agentType: origin.agentType }) : label;
+  const title = origin.agentType
+    ? intl.formatMessage({ id: titleId }, { agentType: origin.agentType })
+    : label;
 
   return (
     <Badge

@@ -2556,7 +2556,9 @@ export class BrowserGuestManager {
     }
     tab.deepCapture = true;
     this.clearGuestCdpIdleRelease(tab);
-    this.log?.(`[browser-use] console deep capture acquired tabId=${tabId} guestId=${safeNumber(() => guest.id)}`);
+    this.log?.(
+      `[browser-use] console deep capture acquired tabId=${tabId} guestId=${safeNumber(() => guest.id)}`,
+    );
     return true;
   }
 
@@ -2571,7 +2573,9 @@ export class BrowserGuestManager {
     const guest = tab.guest;
     if (guest && !safeBool(() => guest.isDestroyed(), true)) {
       void this.sendGuestCdpCommand(tab, guest, "Network.disable").catch((error: unknown) => {
-        this.log?.(`[browser-use] console deep capture disable failed tabId=${tabId}: ${String(error)}`);
+        this.log?.(
+          `[browser-use] console deep capture disable failed tabId=${tabId}: ${String(error)}`,
+        );
       });
     }
     this.scheduleGuestCdpIdleRelease(tab);
@@ -2596,12 +2600,10 @@ export class BrowserGuestManager {
     const frame = tab.consoleResourceFrames?.get(requestId);
     if (frame) {
       try {
-        const content = (await this.sendGuestCdpCommand(
-          tab,
-          guest,
-          "Page.getResourceContent",
-          { frameId: frame.frameId, url: frame.url },
-        )) as { content?: unknown; base64Encoded?: unknown } | undefined;
+        const content = (await this.sendGuestCdpCommand(tab, guest, "Page.getResourceContent", {
+          frameId: frame.frameId,
+          url: frame.url,
+        })) as { content?: unknown; base64Encoded?: unknown } | undefined;
         if (typeof content?.content === "string") {
           const truncated = content.content.length > BROWSER_NETWORK_MAX_BODY_BYTES;
           return {
@@ -2623,12 +2625,9 @@ export class BrowserGuestManager {
       }
     }
     try {
-      const result = (await this.sendGuestCdpCommand(
-        tab,
-        guest,
-        "Network.getResponseBody",
-        { requestId },
-      )) as { body?: unknown; base64Encoded?: unknown } | undefined;
+      const result = (await this.sendGuestCdpCommand(tab, guest, "Network.getResponseBody", {
+        requestId,
+      })) as { body?: unknown; base64Encoded?: unknown } | undefined;
       if (!result || typeof result.body !== "string") {
         return { ok: false, reason: "响应体已被浏览器回收" };
       }

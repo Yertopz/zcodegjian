@@ -235,13 +235,19 @@ test("sitePermissions:按 partition 隔离且可整段清理", async () => {
   const partitionA = "persist:zcode-browser-inst-a";
   await writeEmbeddedBrowserSitePermission("https://a.example", "camera", "allow", partitionA);
   assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "camera"), undefined);
-  assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "camera", partitionA), "allow");
+  assert.equal(
+    getEmbeddedBrowserSitePermission("https://a.example", "camera", partitionA),
+    "allow",
+  );
   assert.equal(
     getEmbeddedBrowserSitePermission("https://a.example", "camera", "persist:zcode-browser-inst-b"),
     undefined,
   );
   await removeEmbeddedBrowserSitePermissionsForPartition(partitionA);
-  assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "camera", partitionA), undefined);
+  assert.equal(
+    getEmbeddedBrowserSitePermission("https://a.example", "camera", partitionA),
+    undefined,
+  );
   resetEmbeddedBrowserSitePermissionsForTest();
 });
 
@@ -452,12 +458,9 @@ test("policy:initializeStore=false 复用已加载的全局站点同意记录", 
   });
   assert.equal(getEmbeddedBrowserSitePermission("https://a.example", "media"), "allow");
   const granted = await new Promise<boolean>((resolve) => {
-    fakeSession.requestHandler(
-      { id: 1, hostWebContents: { id: 9 } },
-      "media",
-      resolve,
-      { requestingUrl: "https://a.example/page" },
-    );
+    fakeSession.requestHandler({ id: 1, hostWebContents: { id: 9 } }, "media", resolve, {
+      requestingUrl: "https://a.example/page",
+    });
   });
   assert.equal(granted, true);
 });

@@ -1266,9 +1266,7 @@ export interface IPlatformService {
   ): Promise<BrowserConsoleAgentBindingLookup>;
 
   /** 注册网络采集批次回调（浅采集与 CDP 深采集共用同一批次流），返回 disposer。 */
-  onBrowserConsoleNetworkBatch?(
-    handler: (payload: BrowserNetworkBatchPayload) => void,
-  ): () => void;
+  onBrowserConsoleNetworkBatch?(handler: (payload: BrowserNetworkBatchPayload) => void): () => void;
 
   /** 注册绑定被外部清除的通知，返回 disposer。 */
   onBrowserConsoleAgentBindingChanged?(
@@ -1276,9 +1274,7 @@ export interface IPlatformService {
   ): () => void;
 
   /** 注册 main 为已绑定会话分配 console tab 的请求，返回 disposer。 */
-  onBrowserConsoleOpenTab?(
-    handler: (payload: BrowserConsoleOpenTabPayload) => void,
-  ): () => void;
+  onBrowserConsoleOpenTab?(handler: (payload: BrowserConsoleOpenTabPayload) => void): () => void;
 
   /** 注册新版本已下载完毕的回调，参数为新版本号，返回 disposer */
   onUpdateReady(callback: (version: string) => void): () => void;

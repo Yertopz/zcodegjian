@@ -411,10 +411,10 @@
     "packages/desktop/src/main/desktopWindowLifecycle.ts": "72f2d9ee1143a336ebbd35b31283705e2ffc412285b75281d7f18ff31399544d",
     "packages/desktop/src/main/embeddedBrowserBluetoothGuard.ts": "09bc0674fc65ebd8aa5ca742ee88a2117340e6fcc65897ba7de738ae89a841e9",
     "packages/desktop/src/main/embeddedBrowserDeviceOptions.ts": "e75152aacec8c19f6acffee13034e10565d758222cb915c22e669eacb6192910",
-    "packages/desktop/src/main/embeddedBrowserPermissionPolicy.ts": "24fc1824ab4442d17beeb04d0338bf24eb859f2592c16ea9e9a3686269c7e94f",
+    "packages/desktop/src/main/embeddedBrowserPermissionPolicy.ts": "bbe81053507ec9c78dfdeede89225f7111852aa1c83569f205649ea64dab3862",
     "packages/desktop/src/main/embeddedBrowserPermissionUiBridge.ts": "6aa2ebd0558ffd9ad14d03c8baf65a3aaac2c4f582c48224ea474bc5741c1619",
     "packages/desktop/src/main/embeddedBrowserSitePermissions.ts": "d70bb46a7647767295f941e69b25697af9a522d7b635065d16f8e93112c5782d",
-    "packages/desktop/src/main/embeddedBrowserSitePermissionStore.ts": "c23f3ce91a70d0d4ee0fd7bdf7d04cadf73c950785b1441d54f3a0652b704613",
+    "packages/desktop/src/main/embeddedBrowserSitePermissionStore.ts": "5008817c437a631e0a1f5f93022f328745521f60c22c41061e3ca9ddc16caaf6",
     "packages/desktop/src/main/index.ts": "f07838f4a5735c6ba12999f552dc9a477cf18d29e137bf279e12ff167d426da0",
     "packages/desktop/src/main/pluginSandbox/capture.ts": "8989d8c4f14c3eb0d98ca0d3715ebe65910fbd2593cdf016bf90427831ffe9e2",
     "packages/desktop/src/main/pluginSandbox/contract.example.ts": "9c0e2cc08b145778c3fb0a43400fc6a2e5c841ebf08cf21770098f80ef7a98a4",
@@ -1730,7 +1730,7 @@
     "packages/shared/src/model-execution.ts": "aa551dafe176fe47e49d27da32c141e65ffdea057096fbaf5824576e797049d2",
     "packages/shared/src/node.ts": "1964469bfb5f6f8b1c46a44a8372914158c8693b17d8603a0aab0f9295503e39",
     "packages/shared/src/node/genUiPaths.ts": "9fe594b8a77cc74114d09146ee2a2f55e9ac2730fad7bfcacdaea82be63b7675",
-    "packages/shared/src/platform.ts": "ea1191c480222847a28c7c23a150833696280264bb2f023d5d1a60b6346e41be",
+    "packages/shared/src/platform.ts": "ca1bfe8bfa97e588358113b8f424039128445bd9dee4bfbbccbd9338a31f00e3",
     "packages/shared/src/protocol.ts": "665b0d0226ef6f0642ac6a38f8be6f3798e6fff950bfbd40e7a5ce868d6ed169",
     "packages/shared/src/request-security-edition/index.ts": "12735d8622bfd0b1b4e566cb5bf773e530805c976880fab37d85a9cbfb8941e4",
     "packages/shared/src/request-security-edition/policy.ts": "b3c87d9f01bf3c9477188399d841dd8f63a6e6a02737f78777bce0a6c4201c42",
@@ -1740,7 +1740,7 @@
     "packages/shared/src/task-realtime-core.ts": "0915d0969491e237a384d5bcfd689733409ce69ac35dace9d336beaaa40952bf",
     "packages/shared/src/test-ids.ts": "819c75622d715f7ce35d85c8979653212050c1046b0ceeda5579045a73c4cdcb",
     "packages/shared/src/validation.ts": "64b6e0554b4a7bbcc42a638f36d63730986a82bef186d009e7e19685a277d9b4",
-    "packages/shared/src/validationAppSettings.ts": "eb36d48909b427decc183fc30e3ce449c18d6a24038fa5ba4a57baf2d5968f84",
+    "packages/shared/src/validationAppSettings.ts": "144c1a3bdbff1e2415b6018be956aa72aeaadcaa402c0d1ec3cb6aaf4992e3a7",
     "packages/shared/src/zcode-agent-model-state.ts": "87e868e6737ee8ef577df9327d9e9c88f167c659022d59a544f87dec78ef9906",
     "packages/shared/src/zcode-agent-policy.ts": "8d7145c732b8f50585b85becb52f6c13d40d424aacbf4bfa48c9faee2c985de1",
     "packages/shared/src/zcode-protocol-legacy-types.ts": "eba9d511ba6c4e7907f32359f1c98cd5103b0af9eeb3a6144fe9149754761bcb",
@@ -2158,7 +2158,7 @@
     "packages/ui/src/v4/highspeed/highSpeedDiffusion.ts": "06f152f95bcb40836c9411254b77ac90cf473b1653a53840f675a2fb50ee231e",
     "packages/ui/src/v4/highspeed/HighSpeedDiffusionCanvas.tsx": "51bfbaf34b5311cca05975b1ab349a7b0f7c832dbb120bb1d73df929ae8449b3",
     "packages/ui/src/v4/savedWorkflowHubContext.tsx": "9935faefc8001f8ca8efd293753d7b05a8a10507023566f0429ad6a057791c1c",
-    "packages/ui/src/v4/SessionPane.tsx": "e75ffc2ba53c7b8ee4d9065a6dbf37f042ebe14518c8bc2ee47225f28b5ebad2",
+    "packages/ui/src/v4/SessionPane.tsx": "27f35a80ac7e37104b3f3bc5e81550dc7a7f1e42cb6b6cc4ab3759f3dccd4f5e",
     "packages/ui/src/v4/topicPreparationRenderUnits.ts": "098c586ab653a7a4edb5a785cc61cb3fb7d18c6da94df1cb6fa664865b08d716",
     "packages/ui/src/v4/useAssistantPreviewCardsForRow.ts": "497fd3b4cf5be6eeff845e48c5f2144fad0a9deef3a5598ce645d8f2bafd9482",
     "packages/ui/src/v4/WorkflowNotificationToolRow.tsx": "e823a6f4451fd8e45b18a9237f1d3a338ffefd7d45a12d0603292428e12af38f",
@@ -32853,7 +32853,7 @@
       "files": [
         {
           "file": "packages/shared/src/platform.ts",
-          "sha256": "de4b99f3f9835faa7ce8cbc94f7e23a16dc0ea5fd8bc0a44f1c26477b645100d"
+          "sha256": "ca1bfe8bfa97e588358113b8f424039128445bd9dee4bfbbccbd9338a31f00e3"
         },
         {
           "file": "packages/shared/src/channels.ts",
@@ -32869,7 +32869,7 @@
         },
         {
           "file": "packages/shared/src/validationAppSettings.ts",
-          "sha256": "b40885c82bdad30a1dbe1e76c4ca2aad0c0b333ce32459cbd5cd9f2b184561ce"
+          "sha256": "144c1a3bdbff1e2415b6018be956aa72aeaadcaa402c0d1ec3cb6aaf4992e3a7"
         },
         {
           "file": "packages/shared/src/index.ts",
@@ -33171,7 +33171,7 @@
       "files": [
         {
           "file": "packages/desktop/src/main/embeddedBrowserPermissionPolicy.ts",
-          "sha256": "1987f812ff1080920242744f4d5cec2a3bc66c9c6952ca9ba3ac26903c117326"
+          "sha256": "bbe81053507ec9c78dfdeede89225f7111852aa1c83569f205649ea64dab3862"
         },
         {
           "file": "packages/desktop/src/main/embeddedBrowserSitePermissions.ts",
@@ -33179,7 +33179,7 @@
         },
         {
           "file": "packages/desktop/src/main/embeddedBrowserSitePermissionStore.ts",
-          "sha256": "b64c286cccd4c69a75e0ba644eb9c3f6ff1a5f04e79516b652f9b671e12956f0"
+          "sha256": "5008817c437a631e0a1f5f93022f328745521f60c22c41061e3ca9ddc16caaf6"
         },
         {
           "file": "packages/desktop/src/main/embeddedBrowserPermissionUiBridge.ts",
@@ -33985,7 +33985,7 @@
         },
         {
           "file": "packages/ui/src/v4/SessionPane.tsx",
-          "sha256": "dbeb20a8ca561581c798fbe101d8307492c6aef65fa293a61f619b5f8c318db5"
+          "sha256": "27f35a80ac7e37104b3f3bc5e81550dc7a7f1e42cb6b6cc4ab3759f3dccd4f5e"
         },
         {
           "file": "packages/ui/src/app-shell/SubagentSessionSidePane.tsx",
@@ -34781,7 +34781,7 @@
         },
         {
           "file": "packages/ui/src/v4/SessionPane.tsx",
-          "sha256": "dbeb20a8ca561581c798fbe101d8307492c6aef65fa293a61f619b5f8c318db5"
+          "sha256": "27f35a80ac7e37104b3f3bc5e81550dc7a7f1e42cb6b6cc4ab3759f3dccd4f5e"
         },
         {
           "file": "packages/ui/src/v4/ConversationQueuePanel.tsx",

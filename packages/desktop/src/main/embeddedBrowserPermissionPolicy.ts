@@ -191,11 +191,7 @@ export async function applyEmbeddedBrowserPermissionPolicy(
     }
 
     if (PROMPT_PERMISSIONS.has(permission)) {
-      const persisted = getEmbeddedBrowserSitePermission(
-        origin,
-        permission,
-        permissionPartition,
-      );
+      const persisted = getEmbeddedBrowserSitePermission(origin, permission, permissionPartition);
       if (persisted === "allow" || persisted === "deny") {
         logDecision(persisted === "allow" ? "granted" : "denied", {
           permission,

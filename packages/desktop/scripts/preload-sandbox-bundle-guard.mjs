@@ -2,10 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { builtinModules } from "node:module";
 import { relative, resolve } from "node:path";
 
-const nodeBuiltins = new Set([
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-]);
+const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 
 export function findExternalPreloadPackageRequires(source) {
   const packages = new Set();

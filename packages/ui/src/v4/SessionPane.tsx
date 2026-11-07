@@ -2007,9 +2007,8 @@ export function SessionPane({
   // 多智能体群聊视图：会话主提示词为「多智能体模式」或团队开关开启时激活。
   // 成员名单来自已启用 agent profiles（含 CreateAgent 新建成员），键为小写名字。
   const groupChat = useGroupChatContext({
-    sessionConfigMainAgentPromptId: snapshot?.sessionId === sessionId
-      ? snapshot?.config.mainAgentPromptId
-      : undefined,
+    sessionConfigMainAgentPromptId:
+      snapshot?.sessionId === sessionId ? snapshot?.config.mainAgentPromptId : undefined,
     multiAgentEnabled: multiAgentSettings?.enabled,
     agents: subagentsForGroupChat,
   });
@@ -4539,7 +4538,9 @@ export function SessionPane({
             onInspect={handleShareSelectionInspect}
           />
           {shareActive && shareInSelectionStage && shareDraft?.view === "timeline" && sessionId ? (
-            <ConversationShareSelectionReopenTab onOpen={() => showShareSelectionPanel(sessionId)} />
+            <ConversationShareSelectionReopenTab
+              onOpen={() => showShareSelectionPanel(sessionId)}
+            />
           ) : null}
           {!isDraft ? (
             <ConversationStatusPanel
@@ -4655,7 +4656,9 @@ export function SessionPane({
                   onFork={forkActionsEnabled ? handleFork : undefined}
                   onRetry={retryActionsEnabled ? handleRetry : undefined}
                   onFeedbackChange={
-                    !readOnly && !selectionSideChat && sessionId ? handleAssistantFeedback : undefined
+                    !readOnly && !selectionSideChat && sessionId
+                      ? handleAssistantFeedback
+                      : undefined
                   }
                   onEdit={editActionsEnabled ? handleEdit : undefined}
                   canLoadOlder={timelineSnapshot ? hasOlderRows(timelineSnapshot) : false}
@@ -4702,7 +4705,9 @@ export function SessionPane({
                   centerEmptyStateWithDock={isDraft}
                   summaryPanelLayout={statusPanelLayout}
                   conversationFindQuery={!isDraft && focused ? conversationFindQuery : ""}
-                  conversationFindActiveIndex={!isDraft && focused ? conversationFindActiveIndex : -1}
+                  conversationFindActiveIndex={
+                    !isDraft && focused ? conversationFindActiveIndex : -1
+                  }
                   conversationFindNavigationRequestId={
                     !isDraft && focused ? conversationFindNavigationRequestId : 0
                   }

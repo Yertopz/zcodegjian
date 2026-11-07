@@ -60,9 +60,7 @@ export function createEmbeddedBrowserSitePermissionStore(
     }
     // 旧扁平结构：顶层就是 origin → permission → state。
     const legacy = parseOriginRecord(candidate);
-    return Object.keys(legacy).length > 0
-      ? { [DEFAULT_BROWSER_INSTANCE_PARTITION]: legacy }
-      : {};
+    return Object.keys(legacy).length > 0 ? { [DEFAULT_BROWSER_INSTANCE_PARTITION]: legacy } : {};
   };
 
   return {

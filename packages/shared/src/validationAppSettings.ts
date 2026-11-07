@@ -659,7 +659,9 @@ export const appSettingsSchema = z.preprocess(
         migrateMessageStreamShowReasoningDefault(
           migrateCloseToTrayOnWindowsDefault(
             migrateLegacyLocalePreference(
-              migrateBuiltinMainAgentPrompts(sanitizeZCodeEndpointOrigin(migrateLegacyWorkspaceSession(value))),
+              migrateBuiltinMainAgentPrompts(
+                sanitizeZCodeEndpointOrigin(migrateLegacyWorkspaceSession(value)),
+              ),
             ),
           ),
         ),

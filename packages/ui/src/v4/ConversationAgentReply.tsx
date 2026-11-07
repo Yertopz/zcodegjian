@@ -125,7 +125,8 @@ export function ConversationAgentReply({
   }
 
   const replyLabel = intl.formatMessage({
-    id: reply?.streaming === true ? "chat.collaboration.replyStreaming" : "chat.collaboration.reply",
+    id:
+      reply?.streaming === true ? "chat.collaboration.replyStreaming" : "chat.collaboration.reply",
   });
 
   return (

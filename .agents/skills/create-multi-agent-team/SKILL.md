@@ -11,10 +11,10 @@ description: 组建多智能体团队时使用：指导如何针对性创建成�
 
 动手创建前，先向用户展示分工表并等确认：
 
-| 成员名 | 职责 | 需要的工具 | 权限模式 | 颜色 |
-| ------ | ---- | ---------- | -------- | ---- |
-| code-reviewer | 审查代码缺陷与回归风险 | Read, Grep, Glob | plan | blue |
-| test-runner | 运行并修复测试 | Bash, Read, Edit | auto | green |
+| 成员名        | 职责                   | 需要的工具       | 权限模式 | 颜色  |
+| ------------- | ---------------------- | ---------------- | -------- | ----- |
+| code-reviewer | 审查代码缺陷与回归风险 | Read, Grep, Glob | plan     | blue  |
+| test-runner   | 运行并修复测试         | Bash, Read, Edit | auto     | green |
 
 - 名字用小写连字符（`docs-writer`），不得与内置 agent（`general-purpose`、`Explore`）重名。
 - 团队规模以任务为准：3 人以内优先，成员越多 @ 额度消耗越快。

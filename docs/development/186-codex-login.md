@@ -6,10 +6,10 @@
 
 两个入口写的是同一份 Provider 配置，行为完全一致：
 
-| 入口 | 位置 | 用法 |
-| --- | --- | --- |
-| 设置页 | 设置 → 模型供应商 → 添加供应商 → 第一张卡片 **Codex 登录** | 填 `SK5 代理`（可选）/ 凭据文件（可选）/ 默认模型（可选）后点「登录」 |
-| CLI | `zcode login codex [--proxy socks5h://user:pass@host:port] [--auth-file <path>] [--model <id>]` | 终端里同参数一次写入 |
+| 入口   | 位置                                                                                            | 用法                                                                  |
+| ------ | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 设置页 | 设置 → 模型供应商 → 添加供应商 → 第一张卡片 **Codex 登录**                                      | 填 `SK5 代理`（可选）/ 凭据文件（可选）/ 默认模型（可选）后点「登录」 |
+| CLI    | `zcode login codex [--proxy socks5h://user:pass@host:port] [--auth-file <path>] [--model <id>]` | 终端里同参数一次写入                                                  |
 
 设置页入口的链路：`ProviderTemplatePicker` 的 Codex 卡片 → `CodexLoginForm` → `useModelProviders().loginCodex` → `IProviderSettingsService.loginCodex` → `createCodexLogin(configRuntime)` → `applyCodexConnection` → `personalRepository.update(...)`。登录成功后 Host 侧 `facade.refresh("codex-login")` 返回新的 `ProviderSettingsView`，UI 用该 View 覆盖本地快照，并像「创建自定义供应商」一样把选中项切到新建的 `codex` 供应商。
 
@@ -160,11 +160,11 @@ AiSdkModelExecution
 
 仓库内没有 E2E 目录，设置页（场景 18-20）用源码级断言兜底，其余场景由服务层与 CLI 测试覆盖：
 
-| 覆盖范围 | 测试文件 | 用例数 |
-| --- | --- | --- |
-| 代理解析表、落库 `network`、重登清代理、View 刷新原因 `codex-login`、能力缺失报错 | `apps/zcode-cli/packages/bootstrap/test/codexLogin.test.ts`、`packages/services/test/codexLogin.test.ts` | 14 / 5 |
-| `login codex` 参数到配置写入、输出里的代理脱敏 | `apps/zcode-cli/packages/cli/test/codexLoginCommand.test.ts` | 6 |
-| 智谱预设与智谱模板均已移除、网格首位是 Codex 卡片、表单三字段与空代理剔除、中英双语文案齐全 | `packages/ui/test/settingsCodexLoginEntry.test.ts` | 5 |
-| `auth.json` 的 `null` 值凭据可读、API Key 登录态与缺 `account_id` 仍拒绝、代理解析与解码、代理端口探测成功与失败 | `packages/provider-node/test/codexLogin.test.ts` | 6 |
+| 覆盖范围                                                                                                         | 测试文件                                                                                                 | 用例数 |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------ |
+| 代理解析表、落库 `network`、重登清代理、View 刷新原因 `codex-login`、能力缺失报错                                | `apps/zcode-cli/packages/bootstrap/test/codexLogin.test.ts`、`packages/services/test/codexLogin.test.ts` | 14 / 5 |
+| `login codex` 参数到配置写入、输出里的代理脱敏                                                                   | `apps/zcode-cli/packages/cli/test/codexLoginCommand.test.ts`                                             | 6      |
+| 智谱预设与智谱模板均已移除、网格首位是 Codex 卡片、表单三字段与空代理剔除、中英双语文案齐全                      | `packages/ui/test/settingsCodexLoginEntry.test.ts`                                                       | 5      |
+| `auth.json` 的 `null` 值凭据可读、API Key 登录态与缺 `account_id` 仍拒绝、代理解析与解码、代理端口探测成功与失败 | `packages/provider-node/test/codexLogin.test.ts`                                                         | 6      |
 
 `packages/provider-node` 已登记进 `scripts/run-tests.mjs` 的 `TEST_PACKAGES`：该包没有 `test` 脚本，不登记则上面 6 条断言不会进 `pnpm test`。运行方式：`cd packages/ui && node --import tsx --test test/settingsCodexLoginEntry.test.ts`（其余同构）。
