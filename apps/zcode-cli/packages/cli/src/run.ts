@@ -596,6 +596,11 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
         commandDeps,
         parsed.values["no-browser"] === true,
         parsed.positionals.slice(1),
+        {
+          proxyUrl: parsed.values.proxy,
+          authFilePath: parsed.values["auth-file"],
+          modelId: parsed.values.model,
+        },
       );
     case "logout":
       return await runLogoutCommand(ctx, options, commandDeps);

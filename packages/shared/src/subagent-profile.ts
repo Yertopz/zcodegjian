@@ -4,6 +4,11 @@ import type { AgentPermissionMode } from "./subagents-types.js";
 
 export type AgentProfileSource = "built-in" | "project" | "user";
 export type AgentMemoryScope = "user" | "project" | "local";
+/**
+ * 成员类别：`"team"` = 由 `CreateAgent` 创建的多智能体团队成员（设置页单独分组、
+ * @ 面板标「多智能体」）；缺省 = 普通子智能体。旧文件无此键，向后兼容。
+ */
+export type AgentProfileKind = "team";
 
 export interface AgentProfile {
   background?: boolean;
@@ -11,6 +16,7 @@ export interface AgentProfile {
   description: string;
   disallowedTools?: readonly string[];
   injectAgentsMd?: boolean;
+  kind?: AgentProfileKind;
   maxTurns?: number;
   mcpServers?: readonly string[];
   memory?: AgentMemoryScope;
@@ -46,6 +52,7 @@ export const agentProfileSchema = z
     modelSelection: modelSelectionSchema.optional(),
     background: z.boolean().optional(),
     injectAgentsMd: z.boolean().optional(),
+    kind: z.enum(["team"]).optional(),
     color: z
       .enum(["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"])
       .optional(),

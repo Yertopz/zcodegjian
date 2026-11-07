@@ -4,7 +4,7 @@
 import { $getRoot, $getSelection, $isRangeSelection, $isTextNode } from "lexical";
 import type { AgentSummary, Locale, SkillSummary, ZCodeSlashCommand } from "@zcode/shared";
 import type { MentionItem } from "@/mentions/mentionTypes.js";
-import { mapSubagentsToMentionItemsForTest } from "@/mentions/providers/subagentsMentionProvider.js";
+import { mapAllAgentsToMentionItems } from "@/mentions/agentMentions.js";
 import { mapSkillsToMentionItemsForTest } from "@/mentions/providers/skillsMentionProvider.js";
 import type { PromptInputSuggestionItem } from "./lib/promptInputTriggers.js";
 
@@ -105,15 +105,31 @@ export function buildSlashSuggestions(commands: ZCodeSlashCommand[]): PromptInpu
   });
 }
 
+/**
+ * `/` 面板的 Agent 建议：团队成员与子智能体共用一份扁平列表（团队在前）。
+ * `@` 面板才需要按团队模式分段，这里只回答「能 @ 到谁」。
+ */
 export function buildSubagentSuggestions(
   agents: Array<
     Pick<
       AgentSummary,
-      "id" | "name" | "description" | "path" | "scope" | "source" | "enabled" | "modelSelection"
+      | "id"
+      | "name"
+      | "description"
+      | "path"
+      | "scope"
+      | "source"
+      | "enabled"
+      | "modelSelection"
+      | "kind"
+      | "color"
+      | "avatar"
     >
   >,
+  locale?: Locale,
+  options: { teamMode?: boolean } = {},
 ): PromptInputSuggestionItem[] {
-  return mapSubagentsToMentionItemsForTest(agents).map((item) =>
+  return mapAllAgentsToMentionItems(agents, { locale, teamMode: options.teamMode }).map((item) =>
     mapSubagentMentionItemToSuggestion(item),
   );
 }

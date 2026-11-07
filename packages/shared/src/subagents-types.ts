@@ -40,12 +40,31 @@ export type AgentColor =
 
 export type SubagentsListMode = "allRuntimeScopes" | "settingsUserOnly";
 
+/**
+ * 团队成员/子智能体的头像。只存放在 `agents-state.json` 的 `agentAvatars`，
+ * 不写进 Markdown frontmatter：frontmatter 是 CLI 运行契约，每个字段都会被 runtime 消费，
+ * 塞进纯 UI 装饰字段会污染 CLI profile；头像属于「本机偏好」，与启停、模型覆盖同层。
+ */
+export const AGENT_AVATAR_EMOJI_MAX_LENGTH = 16;
+/** 图片以 data URL 存盘。262144 字符 ≈ 192 KiB base64，即原图上限 128 KiB（见 UI 侧校验）。 */
+export const AGENT_AVATAR_IMAGE_MAX_LENGTH = 262_144;
+/** 允许的图片 MIME；图片必须自带前缀，避免把任意字符串当 URL 渲染。 */
+export const AGENT_AVATAR_IMAGE_DATA_URL_PATTERN = /^data:image\/(png|jpeg|webp|gif);base64,/;
+
+export type AgentAvatar = { kind: "emoji"; value: string } | { kind: "image"; value: string };
+
+export type AgentAvatars = Readonly<Record<string, AgentAvatar>>;
+
 export interface AgentSummary {
   id: string;
   name: string;
   description: string;
   systemPrompt: string;
   color?: AgentColor;
+  /** 头像来自 `agents-state.json#agentAvatars`，缺省时 UI 回落颜色 + 首字母。 */
+  avatar?: AgentAvatar;
+  /** `"team"` = 多智能体团队成员（CreateAgent 创建）；缺省 = 普通子智能体。 */
+  kind?: "team";
   modelSelection?: ModelSelection;
   defaultModelSelection?: ModelSelection;
   modelSelectionOverride?: ModelSelection;
@@ -93,6 +112,8 @@ export interface SubAgentConfig {
   description: string;
   systemPrompt: string;
   color?: AgentColor;
+  /** `"team"` = 多智能体团队成员；缺省 = 普通子智能体（GUI「新建」入口不传）。 */
+  kind?: "team";
   modelSelection?: ModelSelection;
   tools?: string[];
   disallowedTools?: string[];
@@ -128,6 +149,12 @@ export interface AgentUpdateParams {
 export interface AgentDeleteParams {
   agentId: string;
   filePath: string;
+}
+
+/** 头像写入参数：`avatar: null` 表示删除该 agent 的头像键。 */
+export interface AgentAvatarSetParams {
+  agentId: string;
+  avatar: AgentAvatar | null;
 }
 
 export interface BuiltInSubagentModelOverrideParams {

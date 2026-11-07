@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { ProxyAgent } from "proxy-agent";
 import {
   loadTlsCaCertificates,
+  normalizeProxyUrl,
   resolveProxyUrlForRequest,
   resolveTlsCaCertFile,
 } from "./http-config.js";
@@ -16,6 +17,12 @@ interface NetworkProxyFetchOptions {
   fetch?: NetworkFetch;
   httpProxy?: string;
   noProxy?: string;
+  /**
+   * Provider 独占出口代理：指定后所有 http(s) 请求都走它，
+   * 不参与 noProxy 判定（含 env、captured user no_proxy）与 env 代理回退。
+   * 用于 Provider 级 SOCKS5 出口 —— 用户显式选定的出口不允许被全局直连规则静默绕过。
+   */
+  directProxyUrl?: string;
 }
 
 interface NormalizedFetchRequest {
@@ -49,7 +56,9 @@ export function createNetworkProxyFetch(options: NetworkProxyFetchOptions): Netw
       return directFetch(input, init);
     }
 
-    const proxyUrl = resolveProxyUrlForRequest(requestUrl, options);
+    const proxyUrl = options.directProxyUrl
+      ? normalizeProxyUrl(options.directProxyUrl)
+      : resolveProxyUrlForRequest(requestUrl, options);
     const caCertFile = resolveTlsCaCertFile(options);
     if (!proxyUrl && !caCertFile) {
       return directFetch(input, init);
@@ -64,7 +73,13 @@ export function createNetworkProxyFetch(options: NetworkProxyFetchOptions): Netw
 }
 
 function hasNetworkFetchPolicy(options: NetworkProxyFetchOptions): boolean {
-  return Boolean(options.caCertFile || options.env || options.httpProxy || options.noProxy);
+  return Boolean(
+    options.caCertFile ||
+      options.env ||
+      options.httpProxy ||
+      options.noProxy ||
+      options.directProxyUrl,
+  );
 }
 
 function readFetchInputUrl(input: Parameters<NetworkFetch>[0]): URL | undefined {

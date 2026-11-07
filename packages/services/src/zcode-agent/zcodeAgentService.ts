@@ -2397,7 +2397,10 @@ export function createZCodeAgentService(
               .catch(reportResponseFailure);
             return;
           }
-          if (sessionRuntimePreferencesAuthority === "local") {
+          if (
+            sessionRuntimePreferencesAuthority === "local" ||
+            parsed.data.scope === "main-agent-prompts"
+          ) {
             void (async () => {
               let preferences: ZCodeSessionRuntimePreferencesResult;
               try {

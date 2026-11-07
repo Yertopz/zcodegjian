@@ -6,14 +6,19 @@ import {
   type AgentProfile,
   type AgentProfileParseDiagnostic,
 } from "@zcode/core";
+import { RESERVED_AGENT_NAMES as RESERVED_SUBAGENT_NAMES } from "@zcode/contracts";
 import type { Logger, PluginMetadata } from "@zcode/contracts";
 import {
   createAgentStateId,
   createPluginAgentStateId,
+  multiAgentSettingsSchema,
   parsePluginSubagentModelSelectionOverrides,
   modelSelectionSchema,
+  resolveMultiAgentSettings,
   type BuiltInSubagentModelSelectionOverrides,
   type BuiltInSubagentName,
+  type MultiAgentRuntimeSettings,
+  type MultiAgentSettings,
   type PluginSubagentModelSelectionOverrides,
 } from "@zcode/shared";
 
@@ -26,6 +31,18 @@ interface LoadZCodeAgentProfilesInput {
 }
 
 interface LoadZCodeAgentProfilesResult {
+  builtInModelSelectionOverrides: BuiltInSubagentModelSelectionOverrides;
+  pluginAgentModelSelectionOverrides: PluginSubagentModelSelectionOverrides;
+  diagnostics: AgentProfileParseDiagnostic[];
+  profiles: AgentProfile[];
+  /** 「多智能体」设置（已归一为运行期形态）；损坏或缺失时回落默认值。 */
+  multiAgent: MultiAgentRuntimeSettings;
+  /** 用户级 agent 目录（`<storageRoot>/agents`）：`CreateAgent` 只允许写这里。 */
+  userAgentsDir: string;
+}
+
+/** 插件只贡献 agent profile，不参与「多智能体」设置与创建目录的解析。 */
+interface LoadPluginAgentProfilesResult {
   builtInModelSelectionOverrides: BuiltInSubagentModelSelectionOverrides;
   pluginAgentModelSelectionOverrides: PluginSubagentModelSelectionOverrides;
   diagnostics: AgentProfileParseDiagnostic[];
@@ -46,7 +63,8 @@ interface ParsedPluginAgentProfile {
   profile: AgentProfile;
 }
 
-const RESERVED_AGENT_NAMES = new Set(["general-purpose", "Explore"]);
+/** 内置 agent 名的保留清单与 `CreateAgent` 共用一份（contracts）。 */
+const RESERVED_AGENT_NAMES = new Set(RESERVED_SUBAGENT_NAMES);
 
 export async function loadZCodeAgentProfiles(
   input: LoadZCodeAgentProfilesInput,
@@ -120,8 +138,10 @@ export async function loadZCodeAgentProfiles(
   return {
     builtInModelSelectionOverrides: agentState.builtInModelSelectionOverrides,
     pluginAgentModelSelectionOverrides: agentState.pluginAgentModelSelectionOverrides,
+    multiAgent: resolveMultiAgentSettings(agentState.multiAgent),
     diagnostics,
     profiles,
+    userAgentsDir: join(input.storageRoot, "agents"),
   };
 }
 
@@ -138,7 +158,7 @@ function sanitizeProjectAgentProfile(profile: AgentProfile): AgentProfile {
 
 export function loadPluginAgentProfiles(
   input: LoadPluginAgentProfilesInput,
-): LoadZCodeAgentProfilesResult {
+): LoadPluginAgentProfilesResult {
   const diagnostics: AgentProfileParseDiagnostic[] = [];
   const parsedProfiles: ParsedPluginAgentProfile[] = [];
   const reservedProfileNames = new Set([
@@ -270,6 +290,8 @@ function readAgentState(storageRoot: string): {
   builtInModelSelectionOverrides: BuiltInSubagentModelSelectionOverrides;
   pluginAgentModelSelectionOverrides: PluginSubagentModelSelectionOverrides;
   disabledAgentIds: Set<string>;
+  /** 只读取、不修复：损坏的 `multiAgent` 读成默认值，真实的修复发生在设置页写入时。 */
+  multiAgent?: MultiAgentSettings;
 } {
   try {
     const raw = readFileSync(join(storageRoot, "v2", "agents-state.json"), "utf8");
@@ -277,7 +299,9 @@ function readAgentState(storageRoot: string): {
       builtInModelSelectionOverrides?: unknown;
       pluginAgentModelSelectionOverrides?: unknown;
       disabledAgentIds?: unknown;
+      multiAgent?: unknown;
     };
+    const multiAgent = multiAgentSettingsSchema.safeParse(parsed.multiAgent);
     return {
       pluginAgentModelSelectionOverrides: parsePluginSubagentModelSelectionOverrides(
         parsed.pluginAgentModelSelectionOverrides,
@@ -292,6 +316,7 @@ function readAgentState(storageRoot: string): {
             )
           : [],
       ),
+      ...(multiAgent.success ? { multiAgent: multiAgent.data } : {}),
     };
   } catch {
     return {

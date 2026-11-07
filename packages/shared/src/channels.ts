@@ -30,6 +30,7 @@ import type {
   DockerContainerInfo,
   DesktopCloseToTrayCapability,
   EmbeddedBrowserOpenUrlRequest,
+  EmbeddedBrowserDataClearResult,
   EmbeddedBrowserPermissionPromptEvent,
   EmbeddedBrowserPermissionResolveRequest,
   EmbeddedBrowserSitePermissionResetRequest,
@@ -56,6 +57,35 @@ import type {
 } from "./platform.js";
 import type { BrowserViewportSize } from "./browser-use/command-metadata.js";
 import type {
+  BrowserConsoleClearInstanceDataRequest,
+  BrowserConsoleDeleteResult,
+  BrowserConsoleInstanceMutationResult,
+  BrowserConsolePrepareGuestAttachRequest,
+  BrowserConsolePrepareGuestAttachResult,
+  BrowserConsoleTabIdRequest,
+  BrowserConsoleTabRegisterRequest,
+  BrowserConsoleTabRegisterResult,
+  BrowserConsoleTabUnregisterResult,
+  BrowserInstanceCreateRequest,
+  BrowserInstanceIdRequest,
+  BrowserInstanceRecord,
+  BrowserInstanceUpdateRequest,
+  BrowserConsoleAgentBindingLookup,
+  BrowserConsoleSetAgentBindingRequest,
+  BrowserConsoleSetAgentBindingResult,
+  BrowserConsoleGetAgentBindingRequest,
+  BrowserConsoleDeepCaptureResult,
+  BrowserConsoleNetworkSnapshotResult,
+  BrowserNetworkClearRequest,
+  BrowserNetworkDeepCaptureRequest,
+  BrowserNetworkExportHarRequest,
+  BrowserNetworkHarExportResult,
+  BrowserNetworkResponseBodyRequest,
+  BrowserNetworkResponseBodyResult,
+  BrowserNetworkSnapshotRequest,
+  BrowserNetworkSubscribeRequest,
+} from "./browser-console/index.js";
+import type {
   CuaAccessibilitySettingsResult,
   OpenCuaPermissionOnboardingOptions,
   PrepareCuaHelperPermissionDragResult,
@@ -67,6 +97,7 @@ import type {
 
 /** RPC 服务频道名。与 ServiceDescriptor.channelName 对应。 */
 export const ServiceChannels = {
+  ServerWorkbench: "server-workbench",
   File: "file",
   MediaPreview: "media-preview",
   System: "system",
@@ -412,6 +443,46 @@ export const PlatformChannels = {
   ClearEmbeddedBrowserSitePermissions: "zcode:clear-embedded-browser-site-permissions",
   /** Renderer → Main：重置单个站点的全部权限记录（站点权限设置标签页「重置」，F9） */
   ResetEmbeddedBrowserSitePermission: "zcode:reset-embedded-browser-site-permission",
+  /** Renderer → Main：列出浏览器控制台实例（多实例 / 独立代理）。 */
+  BrowserConsoleListInstances: "zcode:browser-console-list-instances",
+  /** Renderer → Main：新建控制台实例；main 生成 id/partition 并完成 session 安全装配。 */
+  BrowserConsoleCreateInstance: "zcode:browser-console-create-instance",
+  /** Renderer → Main：更新实例名称/颜色/代理。 */
+  BrowserConsoleUpdateInstance: "zcode:browser-console-update-instance",
+  /** Renderer → Main：删除实例并清理其数据。默认实例不可删除。 */
+  BrowserConsoleDeleteInstance: "zcode:browser-console-delete-instance",
+  /** Renderer → Main：创建 console `<webview>` 前的一次性 attach 许可。 */
+  BrowserConsolePrepareGuestAttach: "zcode:browser-console-prepare-guest-attach",
+  /** Renderer → Main：清理指定实例的缓存或全部站点数据。 */
+  BrowserConsoleClearInstanceData: "zcode:browser-console-clear-instance-data",
+  /** Renderer → Main：登记 console tab 归属（tabId → 实例 / 窗口）。 */
+  BrowserConsoleRegisterTab: "zcode:browser-console-register-tab",
+  /** Renderer → Main：关闭 console tab 时释放归属。 */
+  BrowserConsoleUnregisterTab: "zcode:browser-console-unregister-tab",
+  /** Renderer → Main：订阅/退订实例网络浅采集批次推送。 */
+  BrowserConsoleNetworkSubscribe: "zcode:browser-console-network-subscribe",
+  /** Renderer → Main：读取实例网络浅采集缓冲快照。 */
+  BrowserConsoleNetworkSnapshot: "zcode:browser-console-network-snapshot",
+  /** Renderer → Main：清空实例网络缓冲。 */
+  BrowserConsoleNetworkClear: "zcode:browser-console-network-clear",
+  /** Renderer → Main：导出 HAR 1.2（仅在显式用户动作时生成，不写盘）。 */
+  BrowserConsoleNetworkExportHar: "zcode:browser-console-network-export-har",
+  /** Renderer → Main：对当前 tab 申请 CDP 深采集租约。 */
+  BrowserConsoleAcquireDeepCapture: "zcode:browser-console-acquire-deep-capture",
+  /** Renderer → Main：释放深采集租约，恢复空闲 detach。 */
+  BrowserConsoleReleaseDeepCapture: "zcode:browser-console-release-deep-capture",
+  /** Renderer → Main：读取深采集响应体（限额 1MB）。 */
+  BrowserConsoleGetResponseBody: "zcode:browser-console-get-response-body",
+  /** Renderer → Main：设置「AI 控制此浏览器」显式绑定（默认关闭）。 */
+  BrowserConsoleSetAgentBinding: "zcode:browser-console-set-agent-binding",
+  /** Renderer → Main：读取当前会话的控制台实例绑定。 */
+  BrowserConsoleGetAgentBinding: "zcode:browser-console-get-agent-binding",
+  /** Main → Renderer：网络采集批次（浅采集与 CDP 深采集共用）。 */
+  BrowserConsoleNetworkBatch: "zcode:browser-console-network-batch",
+  /** Main → Renderer：绑定被外部清除。 */
+  BrowserConsoleAgentBindingChanged: "zcode:browser-console-agent-binding-changed",
+  /** Main → Renderer：已绑定会话的 newTab 落到控制台实例。 */
+  BrowserConsoleOpenTab: "zcode:browser-console-open-tab",
   /** Main → Renderer：通知有新版本已下载完毕，可以重启安装 */
   UpdateReady: "zcode:update-ready",
   /** Main → Renderer：用户手动点击"检查更新"后的结果反馈（toast 用） */
@@ -609,6 +680,7 @@ export const HostMessageTypes = {
   OffPeakRun: "off-peak-run",
   /** main → host：browser-use 命令执行结果（CDP 执行完回传，按 requestId 关联） */
   BrowserExecuteResult: "browser-execute-result",
+  ServerDesktopResult: "server-desktop-result",
   /** main → host：本地视频 canonical path 授权结果 */
   LocalMediaPreviewPathAuthorizeResult: "local-media-preview-path-authorize-result",
   // Modified by ZCode: 自上游 aac47556 (Apache-2.0) 增量并入(F5)。
@@ -711,6 +783,7 @@ export const HostResponseTypes = {
   OffPeakSchedulerWakeRequest: "off-peak-scheduler-wake-request",
   /** host → main：执行一条 browser-use 命令（main 用 WebContentsView+CDP 执行，按 requestId 关联） */
   BrowserExecuteRequest: "browser-execute-request",
+  ServerDesktopRequest: "server-desktop-request",
   /** host → main：请求授权 Agent 已精确校验的本地视频路径 */
   LocalMediaPreviewPathAuthorizeRequest: "local-media-preview-path-authorize-request",
   /** host → main：RPC 网络遥测批次（channel.command 成功率/耗时） */
@@ -895,6 +968,74 @@ export interface PlatformChannelMap {
   [PlatformChannels.ResetEmbeddedBrowserSitePermission]: {
     request: EmbeddedBrowserSitePermissionResetRequest;
     response: EmbeddedBrowserSitePermissionsSnapshot;
+  };
+  [PlatformChannels.BrowserConsoleListInstances]: {
+    request: void;
+    response: BrowserInstanceRecord[];
+  };
+  [PlatformChannels.BrowserConsoleCreateInstance]: {
+    request: BrowserInstanceCreateRequest;
+    response: BrowserConsoleInstanceMutationResult;
+  };
+  [PlatformChannels.BrowserConsoleUpdateInstance]: {
+    request: BrowserInstanceUpdateRequest;
+    response: BrowserConsoleInstanceMutationResult;
+  };
+  [PlatformChannels.BrowserConsoleDeleteInstance]: {
+    request: BrowserInstanceIdRequest;
+    response: BrowserConsoleDeleteResult;
+  };
+  [PlatformChannels.BrowserConsolePrepareGuestAttach]: {
+    request: BrowserConsolePrepareGuestAttachRequest;
+    response: BrowserConsolePrepareGuestAttachResult;
+  };
+  [PlatformChannels.BrowserConsoleClearInstanceData]: {
+    request: BrowserConsoleClearInstanceDataRequest;
+    response: EmbeddedBrowserDataClearResult;
+  };
+  [PlatformChannels.BrowserConsoleRegisterTab]: {
+    request: BrowserConsoleTabRegisterRequest;
+    response: BrowserConsoleTabRegisterResult;
+  };
+  [PlatformChannels.BrowserConsoleUnregisterTab]: {
+    request: BrowserConsoleTabIdRequest;
+    response: BrowserConsoleTabUnregisterResult;
+  };
+  [PlatformChannels.BrowserConsoleNetworkSubscribe]: {
+    request: BrowserNetworkSubscribeRequest;
+    response: { ok: boolean };
+  };
+  [PlatformChannels.BrowserConsoleNetworkSnapshot]: {
+    request: BrowserNetworkSnapshotRequest;
+    response: BrowserConsoleNetworkSnapshotResult;
+  };
+  [PlatformChannels.BrowserConsoleNetworkClear]: {
+    request: BrowserNetworkClearRequest;
+    response: { ok: boolean };
+  };
+  [PlatformChannels.BrowserConsoleNetworkExportHar]: {
+    request: BrowserNetworkExportHarRequest;
+    response: BrowserNetworkHarExportResult;
+  };
+  [PlatformChannels.BrowserConsoleAcquireDeepCapture]: {
+    request: BrowserNetworkDeepCaptureRequest;
+    response: BrowserConsoleDeepCaptureResult;
+  };
+  [PlatformChannels.BrowserConsoleReleaseDeepCapture]: {
+    request: BrowserNetworkDeepCaptureRequest;
+    response: { ok: boolean };
+  };
+  [PlatformChannels.BrowserConsoleGetResponseBody]: {
+    request: BrowserNetworkResponseBodyRequest;
+    response: BrowserNetworkResponseBodyResult;
+  };
+  [PlatformChannels.BrowserConsoleSetAgentBinding]: {
+    request: BrowserConsoleSetAgentBindingRequest;
+    response: BrowserConsoleSetAgentBindingResult;
+  };
+  [PlatformChannels.BrowserConsoleGetAgentBinding]: {
+    request: BrowserConsoleGetAgentBindingRequest;
+    response: BrowserConsoleAgentBindingLookup;
   };
   [PlatformChannels.BrowserViewReady]: {
     request: {

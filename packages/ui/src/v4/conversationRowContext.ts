@@ -12,7 +12,7 @@ import type { WorkflowRunSettingsChange } from "@/components/workflow-timeline/w
 import type { WorkflowDraftPosition, WorkflowRunCardSummary } from "@/ToolCallBlocks/shared.js";
 import type { Theme } from "@/useTheme.js";
 import type { ModelSelectionView } from "@zcode/services";
-import type { ZCodeWorkflowsForRunCandidate } from "@zcode/shared";
+import type { AgentAvatar, ZCodeWorkflowsForRunCandidate } from "@zcode/shared";
 import type { ConversationAttachmentReadParams, ConversationTransport } from "@/v4/transport.js";
 import type {
   OpenPlanDetailSideTabRequest,
@@ -35,9 +35,40 @@ export type ConversationFileChangesState = Exclude<
   undefined
 >;
 
+/** 群聊视图的成员展示信息（来自 agent profile 的头像、description 与 color）。 */
+export interface GroupChatMemberInfo {
+  name: string;
+  /** 一句话简介；取 profile.description。 */
+  description?: string;
+  /** profile.color 的 8 色枚举；缺省时按名字推导兜底色。 */
+  color?: string;
+  /** profile.avatar（emoji 或本地 data URL 图片）；缺省时回退颜色 + 首字。 */
+  avatar?: AgentAvatar;
+  /** 团队成员为 "team"；群聊样式据此与内置子智能体区分。 */
+  kind?: "team";
+}
+
 export interface ConversationRowRenderContext {
   logEpoch?: string;
   workspacePath: string;
+  /**
+   * 多智能体群聊视图：会话处于多智能体模式（团队开关开启，或主提示词为
+   * 「多智能体模式」multi-agent-mode）时为 true。工具卡渲染器据此切换群聊样式。
+   */
+  groupChatActive?: boolean;
+  /**
+   * 群聊成员名 → 展示信息（简称、头像色）。数据源是已启用 agent profiles
+   * （含 CreateAgent 经 onCreated 追加的成员），由宿主（SessionPane）建立。
+   */
+  groupChatMembers?: ReadonlyMap<string, GroupChatMemberInfo>;
+  /**
+   * 本轮真实用户输入的文本（`origin === "realUser"` 的那条 userInput row）。
+   *
+   * 只用于群聊消息卡的引用条（`你：…`）：成员是被用户那句 @ 触发的，不是被成员的
+   * 派单提示词触发的。逐轮取值，由 ConversationTurnGroup 用该轮可见用户行的文本覆盖，
+   * 所以同一个 pane 里不同轮的卡片各引各的；缺席即不渲染引用条。
+   */
+  turnUserInputText?: string;
   /** 当前 workspace Host 的用户 Home，用于解析 Assistant 输出中的 ~/ 路径。 */
   workspaceHomePath?: string;
   workspaceIdentity?: string;

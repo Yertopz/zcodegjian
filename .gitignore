@@ -76,3 +76,12 @@ packages/desktop/.e2e-artifacts/
 packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
+# 桌面开发态的隔离数据根：本地启动时用 ZCODE_DATA_BASE_DIR 指向它，
+# 以免开发实例读写真实 ~/.zcode 数据。
+.zcode-dev-home/
+packages/desktop/resources/server-rdp/
+
+# 放在仓库根、与本项目无关的参考项目副本：它们不是本仓库的源码，也不参与构建、
+# 检查与发布。留在本地供对照阅读；不进版本库、不进 lint/格式化范围。
+/codex-yinzi-media-workflow-main/
+/frakio-work/

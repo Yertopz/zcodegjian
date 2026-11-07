@@ -27,6 +27,26 @@ const nonBlankRequiredString = z.string().refine((value) => value.trim().length 
   params: { configIssueCode: "required-field-missing" },
 });
 
+/**
+ * Provider 级出网代理。声明在 Provider 配置上而不是全局网络设置上，
+ * 因为同一进程里不同 Provider 必须能走不同出口（例如 Codex 走 SOCKS5）。
+ * socks5h 表示由代理侧解析域名，避免本地 DNS 泄漏。
+ */
+export const providerNetworkProxyTypeDataSchema = z.enum(["socks5", "socks5h", "http", "https"]);
+export const completeProviderNetworkProxyDataSchema = z
+  .object({
+    type: providerNetworkProxyTypeDataSchema,
+    host: nonBlankRequiredString,
+    port: z.number().int().min(1).max(65535),
+    username: z.string().nullable().optional(),
+    password: z.string().nullable().optional(),
+  })
+  .strict();
+export const providerNetworkProxyDataSchema = completeProviderNetworkProxyDataSchema.extend({
+  host: z.string().nullable().optional(),
+  port: z.number().int().min(1).max(65535).nullable().optional(),
+});
+
 export const apiKeyAccessDataSchema = z
   .object({
     type: z.enum(["api-key", "zhipu-coding-plan-api-key"]),
@@ -86,6 +106,7 @@ export const providerConfigDataSchema = z
     logo: providerLogoDataSchema.nullable().optional(),
     access: providerAccessDataSchema.nullable().optional(),
     api: providerApiDataSchema.nullable().optional(),
+    network: providerNetworkProxyDataSchema.nullable().optional(),
     builtinModelIds: modelIdsDataSchema,
     personalModelIds: modelIdsDataSchema,
     modelOrder: modelIdsDataSchema,

@@ -3,7 +3,9 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import type { AgentColor } from "@zcode/shared";
 import { MessageResponse } from "@/components/ai-elements/message.js";
 import { cn } from "@/components/lib/utils.js";
+import { TeamMemberIdentityRow } from "@/components/team/TeamMemberIdentityRow.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { resolveGroupChatMember } from "@/lib/groupChatMembers.js";
 import { resolveSubagentColorFromName, SUBAGENT_TEXT_COLOR_CLASS } from "@/lib/subagentColors.js";
 import { useSubagentsContextStore } from "@/store/subagentsContextStore.js";
 import { useSubagentsStore } from "@/store/subagentsStore.js";
@@ -142,9 +144,8 @@ function AgentNameText({ color, name }: { color: AgentColor; name: string }) {
   );
 }
 
-function normalizeAgentLookupValue(value: string): string {
-  return value.trim().toLowerCase();
-}
+// 名字/ID 归一化统一走 lib/groupChatMembers.ts：名册、群聊消息卡、回复卡和这里
+// 必须用同一条规则，否则会出现「面板认得出、工具卡认不出」的成员。
 
 function BackgroundAgentProcessSection({
   outputFile,
@@ -232,22 +233,35 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
       : configuredAgentsFromHook.length > 0
         ? configuredAgentsFromHook
         : useSubagentsStore.getState().agents;
-  const configuredAgentColor = useMemo(() => {
-    const lookupName = normalizeAgentLookupValue(agentName);
-    if (!lookupName) {
-      return undefined;
-    }
-    return configuredAgents.find((agent) => {
-      const name = normalizeAgentLookupValue(agent.name);
-      const id = normalizeAgentLookupValue(agent.id);
-      return name === lookupName || id === lookupName;
-    })?.color;
-  }, [agentName, configuredAgents]);
+  // 多智能体成员在多智能体模式下由 CreateAgent 创建（kind: "team"），它们与内置子智能体
+  // 走的是同一份 Agent 摘要行，但语义是「团队成员」。判定依据取配置里的 agent kind，
+  // 否则成员卡片会继续顶着「子智能体」标签，用户看到的就是「还是子智能体」。
+  // 查表复用名册那条规则（先名字后 ID、trim + 小写），避免工具卡与面板认人标准不一致。
+  const configuredAgent = useMemo(
+    () => resolveGroupChatMember(configuredAgents, agentName),
+    [agentName, configuredAgents],
+  );
+  const configuredAgentColor = configuredAgent?.color;
+  const isTeamMember = configuredAgent?.kind === "team";
+  const agentKindLabel = isTeamMember
+    ? formatAgentMessage(intl, "chat.toolCall.agent.teamMember", "团队智能体")
+    : fallbackLabel;
   const agentColor = agentName
     ? (configuredAgentColor ?? getAgentColor(toolCall) ?? resolveSubagentColorFromName(agentName))
     : null;
-  const agentNameDetail =
-    agentName && agentColor ? <AgentNameText color={agentColor} name={agentName} /> : null;
+  const agentNameDetail = !agentName ? null : isTeamMember ? (
+    // 摘要行只有一行高度（ToolSummaryRow 把 kindDetail 包在 shrink-0 里）：
+    // 团队成员在这里只表达「头像 + 名字」，简介交给群聊气泡、回复卡和左侧成员面板，
+    // 塞进摘要行会把主文本挤掉。
+    <TeamMemberIdentityRow
+      name={agentName}
+      avatar={configuredAgent?.avatar}
+      color={configuredAgentColor}
+      variant="inline"
+    />
+  ) : agentColor ? (
+    <AgentNameText color={agentColor} name={agentName} />
+  ) : null;
   // Agent 父块的完成/进行中边界只由父 Agent tool 决定。
   // 子 tool 是展开区明细，不能反向续住父块运行态，否则父 Agent completed 后
   // 仍会显示渐变和子工具摘要，和协议里的父工具生命周期不一致。
@@ -374,8 +388,8 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
         summaryAction={summaryAction}
         // 产品边界：Agent/Task 在父对话中只保留单行摘要；完整 child timeline 统一从
         // 右侧 tab / 手机抽屉查看，因此这里既不自动展开，也不提供手动展开入口。
-        kindLabel={fallbackLabel}
-        expandedKindLabel={fallbackLabel}
+        kindLabel={agentKindLabel}
+        expandedKindLabel={agentKindLabel}
         kindDetail={agentNameDetail}
         expandedKindDetail={agentNameDetail}
         sourceLabel={sourceLabel}

@@ -117,6 +117,17 @@ import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-
 // Agent Runtime
 // -----------------------------------------------
 
+/**
+ * 「多智能体」（agent team）的运行期形态：设置文件的三个字段 + runtime 推导出的
+ * `canCreateAgents`（谁是团队创建者由 `creatorAgentId` 决定，默认主智能体 `main`）。
+ */
+export interface AgentRuntimeMultiAgentSettings {
+  enabled: boolean;
+  mentionLimit: number;
+  creatorAgentId: string;
+  canCreateAgents: boolean;
+}
+
 export interface AgentRuntimeConfig {
   /**
    * 工具搜索（F14）的请求级模式。由 CLI `--toolsearch-mode` / `--prompt` 链路口径下发；
@@ -151,8 +162,19 @@ export interface AgentRuntimeConfig {
     maxTurns?: number;
     outputRootDir?: string;
     profiles?: readonly AgentProfile[];
+    /**
+     * 用户级 agent 目录（`<storageRoot>/agents`）。`CreateAgent` 只在这里新建
+     * `<name>.md`；不配置时该工具不会注册（见 `resolveIncludeCreateAgentTool`）。
+     */
+    userAgentsDir?: string;
     builtInModelSelectionOverrides?: Partial<Record<"general-purpose" | "Explore", ModelSelection>>;
   };
+  /**
+   * 「多智能体」运行期设置。由 bootstrap 每建会话从 `agents-state.json` 的 `multiAgent`
+   * 读一次后下发，协议侧传入的同名字段一律被覆盖（开关只能由设置页写入磁盘）。
+   * 推导与工具门见 `runtime/helpers/multi-agent-config.ts`。
+   */
+  multiAgent?: AgentRuntimeMultiAgentSettings;
   toolAllowlist?: readonly string[];
   toolDisallowlist?: readonly string[];
   /**
@@ -235,6 +257,9 @@ export interface AgentRuntimeConfig {
 
   // Context Builder config
   systemPrompt?: string;
+  mainAgentPromptId?: string | null;
+  /** 当前执行轮的固定快照；选择变更不得写此字段。 */
+  mainAgentPrompt?: import("@zcode/shared").MainAgentPromptSnapshot;
   /**
    * 动态工作流子代理的身份输入：在场即让
    * context builder 走「基座 + 工作流子代理契约 + persona 叠加」路径，而不是把 persona 当

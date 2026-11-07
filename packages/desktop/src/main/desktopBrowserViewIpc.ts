@@ -12,6 +12,7 @@ import {
   type BrowserViewScreenshotSurfaceReadyPayload,
 } from "@zcode/shared";
 import { registerBrowserDataIpcHandlers } from "./desktopBrowserDataIpc.js";
+import { registerBrowserConsoleIpcHandlers } from "./browserConsole/browserConsoleIpc.js";
 
 export type AttachBrowserGuest = (
   key: string,
@@ -83,6 +84,7 @@ function registerBrowserViewIpcHandlers(
         workspaceKey?: string;
         remoteSessionId?: string;
         sessionId?: string;
+        consoleInstanceId?: string;
         residencyGeneration?: number;
       },
     ) => {
@@ -113,11 +115,16 @@ function registerBrowserViewIpcHandlers(
           : nonEmptyStringSchema.parse(payload.remoteSessionId);
       const sessionId =
         payload.sessionId === undefined ? undefined : nonEmptyStringSchema.parse(payload.sessionId);
+      const consoleInstanceId =
+        payload.consoleInstanceId === undefined
+          ? undefined
+          : nonEmptyStringSchema.parse(payload.consoleInstanceId);
       return ((await attachBrowserGuest?.(key, payload.webContentsId, {
         ...(payload.active === undefined ? {} : { active: payload.active }),
         ...(workspaceKey === undefined ? {} : { workspaceKey }),
         ...(remoteSessionId === undefined ? {} : { remoteSessionId }),
         ...(sessionId === undefined ? {} : { sessionId }),
+        ...(consoleInstanceId === undefined ? {} : { consoleInstanceId }),
         ...(payload.residencyGeneration === undefined
           ? {}
           : { residencyGeneration: payload.residencyGeneration }),
@@ -267,6 +274,7 @@ export function registerDesktopBrowserIpcHandlers(
     residencyHandlers,
   );
   registerBrowserDataIpcHandlers(logger);
+  registerBrowserConsoleIpcHandlers(logger);
 }
 
 function parseBrowserTabScope(payload: BrowserViewCloseTabRequest): BrowserViewCloseTabRequest {

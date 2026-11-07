@@ -11,6 +11,11 @@ import type { HookRunner, SessionId, ToolExecutor, TraceContext } from "../deps.
 import type { AgentRuntimeInternal } from "../internal.js";
 import type { AgentRuntimeDeps } from "../types.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "../methods/embedded-search-branch.js";
+import {
+  resolveIncludeAgentTool,
+  resolveIncludeCreateAgentTool,
+  resolveRuntimeCreateAgentTarget,
+} from "./multi-agent-config.js";
 import { getSessionShellSelectionFromConfig } from "../methods/session-shell-environment.js";
 import { createRuntimeSessionModePort } from "../session-mode-port.js";
 import { shouldSuppressSealedSubagentBashNotification } from "../../runtime-task/notification-policy.js";
@@ -47,11 +52,25 @@ export function initializeRuntimeTooling(
 function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps): void {
   const nodeReplEnabled = runtime.config.runtimeFeatures?.nodeRepl === true;
   const browserUseEnabled = resolveRuntimeBrowserUseEnabled(runtime, deps);
+  const createAgentTarget = resolveRuntimeCreateAgentTarget(runtime);
   registerBuiltInTools(runtime.registry, {
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
     includeSkill: Boolean(runtime.skillPort),
-    includeAgent: Boolean(runtime.subagentPort),
+    // 模式门要能双向：构造时主提示词还没选（门恒 false），选中「多智能体模式」后必须把
+    // 已注册的 Agent/Task 摘掉，否则模型照样派生子智能体。下架入口只在模式门上使用。
+    unregister: (name) => runtime.registry.unregister(name),
+    // 子运行时可能只持有受限同伴消息端口；端口存在不代表允许继续派生 Agent。
+    // 多智能体模式下同理：团队靠 @ 协作，Agent（派生）整体下架，见 multi-agent-config.ts。
+    includeAgent: resolveIncludeAgentTool({
+      config: runtime.config,
+      hasSubagentPort: Boolean(runtime.subagentPort),
+    }),
     includeSendMessage: runtime.subagentPort?.sendMessage !== undefined,
+    // 团队创建入口：只有设置里指定的「创建者」（默认主智能体）才装配，且必须有用户级
+    // agent 目录可写。团队成员与普通子运行时看到的是同一个静默缺席。
+    includeCreateAgent: resolveIncludeCreateAgentTool(runtime.config),
+    ...(createAgentTarget ? { createAgentTarget } : {}),
+    peerMessagesOnly: runtime.config.taskType === "subagent_child",
     includeRespondToCoordinator:
       runtime.config.taskType === "subagent_child" && Boolean(deps.coordinatorResponsePort),
     // submit_result 只在注入了 workflowSubmitPort 的 workflow actor 会话注册。以端口存在为门，

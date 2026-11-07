@@ -102,6 +102,8 @@ export async function executeTurnCommand(
   // 这里在任何 await 之前冻结本轮事实；后续配置变化只作用于下一轮。
   const admittedModelSelection = options?.intent?.modelSelection ?? this.getSessionModelSelection();
   const admittedOutputStyle = this.config.outputStyle;
+  // admission 已冻结正文；排队后修改设置不得改写这一轮。
+  this.config.mainAgentPrompt = options?.intent?.mainAgentPrompt ?? null;
   const compactInstructions = parseCompactCommand(input);
   const rewindCommand = parseRewindCommand(input);
   const turnId = startReservation?.turnId ?? createTurnId();

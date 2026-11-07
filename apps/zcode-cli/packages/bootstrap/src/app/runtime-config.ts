@@ -1,7 +1,12 @@
 import type { ConfigResult } from "@zcode/adapters/config";
 import { resolveInitialModelSelection, type ModelSelectionOptions } from "@zcode/provider";
 import { resolveBashTimeoutPolicy, type AgentProfile, type AgentRuntimeConfig } from "@zcode/core";
-import { type BuiltInSubagentModelSelectionOverrides } from "@zcode/shared";
+import { createMainRuntimeMultiAgentSettings } from "@zcode/core";
+import {
+  resolveMultiAgentSettings,
+  type BuiltInSubagentModelSelectionOverrides,
+  type MultiAgentRuntimeSettings,
+} from "@zcode/shared";
 import {
   type CollaborationMode,
   type HookConfigSource,
@@ -42,6 +47,13 @@ export function resolveAppRuntimeConfig(input: {
   pluginRuntimeFeatures?: AgentRuntimeConfig["runtimeFeatures"];
   subagentOutputRootDir: string;
   subagentProfiles?: readonly AgentProfile[];
+  /**
+   * 「多智能体」设置，由 bootstrap 每建会话从 `agents-state.json` 解析后传入。
+   * 它是唯一来源：`options.runtimeConfig.multiAgent`（协议侧）不参与判定。
+   */
+  multiAgent?: MultiAgentRuntimeSettings;
+  /** 用户级 agent 目录；`CreateAgent` 只往这里写 `<name>.md`。 */
+  userAgentsDir?: string;
   storageRoot?: string;
   workingDirectory: string;
   workspaceIdentity?: string;
@@ -175,7 +187,11 @@ export function resolveAppRuntimeConfig(input: {
         ...runtimeBuiltInModelSelectionOverrides,
       },
       profiles: [...(options.runtimeConfig?.subagents?.profiles ?? []), ...subagentProfiles],
+      ...(input.userAgentsDir ? { userAgentsDir: input.userAgentsDir } : {}),
     },
+    // 「多智能体」只认磁盘设置（agents-state.json）。`...options.runtimeConfig` 里即便出现
+    // 同名字段也必须被这一行覆盖：开关是用户设置，不是 Renderer 的会话偏好。
+    multiAgent: createMainRuntimeMultiAgentSettings(resolveMultiAgentSettings(input.multiAgent)),
     memory: {
       cliStorageRoot,
       enabled: options.runtimeConfig?.memory?.enabled ?? configResult.config.features.memory,

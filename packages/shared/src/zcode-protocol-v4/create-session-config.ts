@@ -2,6 +2,7 @@ import { z } from "zod";
 import { modelSelectionSchema } from "../model-selection.js";
 
 export const createSessionRequestedConfigSchema = z.object({
+  mainAgentPromptId: z.string().min(1).max(128).nullable().optional(),
   modelSelection: modelSelectionSchema.optional(),
   provider: z.string().optional(),
   model: z.string().optional(),

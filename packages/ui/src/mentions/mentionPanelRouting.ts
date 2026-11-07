@@ -1,9 +1,29 @@
 import type { PromptInputTrigger } from "@/lib/promptInputTriggers.js";
 
-export type MentionPanelGroupId = "plugins" | "files" | "sessions" | "whiteboards" | "skills";
+export type MentionPanelGroupId =
+  | "subagents"
+  | "teamMembers"
+  | "plugins"
+  | "files"
+  | "sessions"
+  | "whiteboards"
+  | "skills";
 export type SessionMentionWorkspaceScope = "current-workspace" | "same-authority-workspaces";
 
 const CONTEXT_GROUP_ORDER: readonly MentionPanelGroupId[] = [
+  "subagents",
+  "plugins",
+  "files",
+  "sessions",
+  "whiteboards",
+];
+/**
+ * 多智能体模式下的 `@` 分组顺序：团队成员升到第一位。
+ * 团队会话里成员是首选协作对象，子智能体退到第二位；其余分组不变。
+ */
+const TEAM_CONTEXT_GROUP_ORDER: readonly MentionPanelGroupId[] = [
+  "teamMembers",
+  "subagents",
   "plugins",
   "files",
   "sessions",
@@ -15,12 +35,16 @@ const SKILL_GROUP_ORDER: readonly MentionPanelGroupId[] = ["skills"];
 /**
  * 输入触发器只负责发现入口，不改变候选选中后的 canonical mention。
  * `#` 与 `$`（含输入层归一后的 `¥` / `￥`）继续保留旧单分组面板。
+ *
+ * `teamMode` 由调用方按「当前输入框所属会话是否多智能体模式」传入：
+ * 团队成员分组只在团队模式下出现，避免普通会话里也挂一段空成员列表。
  */
 export function getMentionPanelGroupOrder(
   trigger: PromptInputTrigger | null | undefined,
+  options: { teamMode?: boolean } = {},
 ): readonly MentionPanelGroupId[] {
   if (trigger === "@") {
-    return CONTEXT_GROUP_ORDER;
+    return options.teamMode === true ? TEAM_CONTEXT_GROUP_ORDER : CONTEXT_GROUP_ORDER;
   }
   if (trigger === "#") {
     return SESSION_GROUP_ORDER;

@@ -24,6 +24,9 @@ const VALID_COLORS = new Set<AgentColor>([
 
 const VALID_PERMISSION_MODES = new Set<AgentPermissionMode>(["auto", "plan"]);
 
+/** 与 shared 的 `AgentProfileKind` 对齐；frontmatter 里只有 `team` 一个合法值。 */
+const VALID_KINDS = new Set<string>(["team"]);
+
 interface ParseSubagentMarkdownInput {
   content: string;
   path: string;
@@ -66,6 +69,7 @@ export function parseSubagentMarkdown(
   const modelSelection = parseSubagentMarkdownSelection(frontmatter);
   const color = normalizeEnum(frontmatter.color, VALID_COLORS);
   const permissionMode = normalizeEnum(frontmatter.permissionMode, VALID_PERMISSION_MODES);
+  const kind = normalizeEnum(frontmatter.kind, VALID_KINDS) as "team" | undefined;
   const maxTurns = normalizePositiveInteger(frontmatter.maxTurns);
   const tools = parseToolSpecList(frontmatter.tools);
   const disallowedTools = parseToolSpecList(frontmatter.disallowedTools);
@@ -81,6 +85,7 @@ export function parseSubagentMarkdown(
       description,
       systemPrompt: parsed.body.trim(),
       ...(color ? { color } : {}),
+      ...(kind ? { kind } : {}),
       ...(modelSelection ? { modelSelection } : {}),
       ...(tools ? { tools } : {}),
       ...(disallowedTools ? { disallowedTools } : {}),
@@ -108,6 +113,7 @@ export function serializeSubagentMarkdown(config: SubAgentConfig): string {
     `description: "${escapeYamlString(config.description)}"`,
   ];
   appendScalar(frontmatterLines, "color", config.color);
+  appendScalar(frontmatterLines, "kind", config.kind);
   if (config.modelSelection) {
     appendScalar(frontmatterLines, "model", formatSubagentMarkdownModel(config.modelSelection));
     appendScalar(frontmatterLines, "thoughtLevel", config.modelSelection.options?.reasoningLevel);

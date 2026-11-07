@@ -1,5 +1,8 @@
 import { rm } from "node:fs/promises";
 import process from "node:process";
+import { prepareServerRdp } from "./prepare-server-rdp.mjs";
+import { assertDesktopPreloadBundlesAreSelfContained } from "./preload-sandbox-bundle-guard.mjs";
+await prepareServerRdp();
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -98,6 +101,10 @@ export async function runDesktopProductionBuild({ cwd = resolveDesktopBuildCwd()
 
     await runCommandAsync(step);
   }
+
+  // 最终由 Electron sandbox 消费 preload；构建完成即检查 npm 依赖已内联，避免安装后才出现空白窗口。
+  const preloadGuard = await assertDesktopPreloadBundlesAreSelfContained({ desktopRoot: cwd });
+  console.log(`[build] sandboxed preload dependency check passed (${preloadGuard.checkedBundles} bundles)`);
 }
 
 const isEntrypoint = process.argv[1] === fileURLToPath(import.meta.url);

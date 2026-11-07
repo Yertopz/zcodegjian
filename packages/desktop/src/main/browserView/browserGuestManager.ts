@@ -4,6 +4,7 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { webContents, type WebFrameMain } from "electron";
 import {
+  BROWSER_NETWORK_MAX_BODY_BYTES,
   BROWSER_VIEWPORT_LIMITS,
   DEFAULT_AGENT_BROWSER_VIEWPORT,
   type BrowserClientMode,
@@ -193,6 +194,19 @@ interface ManagedTab {
   cachedUrl: string;
   cachedTitle: string;
   cachedFaviconUrl: string | null;
+  /** 控制台网络深采集租约：为 true 时禁止 CDP 空闲 detach。 */
+  deepCapture?: boolean;
+  /**
+   * 深采集期间记录每个 requestId 的 frameId + url，供读取响应体使用。
+   * `Network.getResponseBody` 在 `<webview>` guest 上稳定返回
+   * "No resource with given identifier found"（实测：请求事件在 root 会话上、
+   * 同一 requestId 在同一会话里查不到 loader），`Page.getResourceContent` 可读到。
+   */
+  consoleResourceFrames?: Map<string, { frameId: string; url: string }>;
+  /** 控制台实例 id；仅 console tab 有值。 */
+  consoleInstanceId?: string;
+  /** console tab 当前是否被某个 Agent 会话认领。 */
+  consoleClaimed?: boolean;
   openedAt: number;
   restoredFromStore?: boolean;
 }
@@ -259,6 +273,8 @@ const DEFAULT_GUEST_CDP_TEARDOWN_TIMEOUT_MS = 1_000;
 // CDP 命令流空闲释放阈值：覆盖实测崩溃窗口（turn 内命令间隙 0.4~9s）的同时，
 // 不打断 agent 密集操作流（命令间隔通常远小于该值）。
 const DEFAULT_GUEST_CDP_IDLE_RELEASE_MS = 1_500;
+/** 深采集里保留 requestId → frameId/url 的条数上限（只为读响应体定位，不存内容）。 */
+const MAX_CONSOLE_RESOURCE_FRAMES = 500;
 const RECORDING_RESULT_TTL_MS = 60 * 60 * 1_000;
 const DEFAULT_BACKGROUND_BROWSER_VIEWPORT: BrowserViewportSize = {
   width: 800,
@@ -529,6 +545,8 @@ export class BrowserGuestManager {
       remoteSessionId?: string;
       sessionId?: string;
       residencyGeneration?: number;
+      /** 控制台 tab 所属实例；有值时 tab 进入 console 语义（可被绑定会话认领）。 */
+      consoleInstanceId?: string;
     },
   ): BrowserGuestAttachResult {
     let tab = this.tabs.get(tabId);
@@ -591,6 +609,7 @@ export class BrowserGuestManager {
         origin: options?.workspaceKey ? "user" : "agent",
         claimable: Boolean(options?.workspaceKey && options.sessionId?.trim()),
         ...(options?.workspaceKey ? { userOwner: { ...owner } } : {}),
+        ...(options?.consoleInstanceId ? { consoleInstanceId: options.consoleInstanceId } : {}),
         active: false,
         loading: false,
         mediaActive: false,
@@ -605,6 +624,10 @@ export class BrowserGuestManager {
     if (tab.lifecycle === "closed") {
       this.log?.(`[browser-use] attachGuest rejected tabId=${tabId} reason=closed`);
       return { ok: false, reason: "closed", recoveryRequested: false };
+    }
+    // 已由 Agent 创建、随后由控制台 UI 挂载的 tab 也要进入 console 语义。
+    if (options?.consoleInstanceId && !tab.consoleInstanceId) {
+      tab.consoleInstanceId = options.consoleInstanceId;
     }
     if (options?.windowId !== undefined && tab.owner.windowId !== options.windowId) {
       this.log?.(
@@ -2497,6 +2520,188 @@ export class BrowserGuestManager {
     }
   }
 
+  private consoleNetworkEventHandler?: (event: {
+    tabId: string;
+    method: string;
+    params: unknown;
+  }) => void;
+
+  /** 控制台网络深采集的事件出口。事件只在 `acquireConsoleDeepCapture` 租约内转发。 */
+  setConsoleNetworkEventHandler(
+    handler: ((event: { tabId: string; method: string; params: unknown }) => void) | undefined,
+  ): void {
+    this.consoleNetworkEventHandler = handler;
+  }
+
+  /**
+   * 申请 CDP 深采集租约。
+   *
+   * 租约期间禁止命令级空闲 detach（Network 事件会随 detach 消失）；必须由 UI 显式释放。
+   * 返回 false 表示 guest 尚未 attach 或 debugger 不可用——UI 必须显式提示，不能假装已开。
+   */
+  async acquireConsoleDeepCapture(tabId: string): Promise<boolean> {
+    const tab = this.tabs.get(tabId);
+    if (!tab || tab.lifecycle === "closed" || tab.guestLifecycle !== "attached") return false;
+    const guest = tab.guest;
+    if (!guest || safeBool(() => guest.isDestroyed(), true)) return false;
+    try {
+      await this.sendGuestCdpCommand(tab, guest, "Network.enable", {
+        maxTotalBufferSize: 100 * 1024 * 1024,
+        maxResourceBufferSize: 10 * 1024 * 1024,
+        maxPostDataSize: 64 * 1024,
+      });
+    } catch (error) {
+      this.warn(`browser console deep capture enable failed tabId=${tabId}`, error);
+      return false;
+    }
+    tab.deepCapture = true;
+    this.clearGuestCdpIdleRelease(tab);
+    this.log?.(`[browser-use] console deep capture acquired tabId=${tabId} guestId=${safeNumber(() => guest.id)}`);
+    return true;
+  }
+
+  /** 释放深采集租约；失败只降级为继续持有 CDP，不阻塞 UI。 */
+  releaseConsoleDeepCapture(tabId: string): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return;
+    tab.deepCapture = false;
+    // 租约结束后旧 requestId 不再可读，留着只会积内存。
+    tab.consoleResourceFrames?.clear();
+    this.log?.(`[browser-use] console deep capture released tabId=${tabId}`);
+    const guest = tab.guest;
+    if (guest && !safeBool(() => guest.isDestroyed(), true)) {
+      void this.sendGuestCdpCommand(tab, guest, "Network.disable").catch((error: unknown) => {
+        this.log?.(`[browser-use] console deep capture disable failed tabId=${tabId}: ${String(error)}`);
+      });
+    }
+    this.scheduleGuestCdpIdleRelease(tab);
+  }
+
+  /** 读取深采集响应体；超限额返回截断标记，失败返回可读原因。 */
+  async getConsoleCapturedResponseBody(
+    tabId: string,
+    requestId: string,
+  ): Promise<
+    | { ok: true; body: string; base64Encoded: boolean; truncated: boolean }
+    | { ok: false; reason: string }
+  > {
+    const tab = this.tabs.get(tabId);
+    const guest = tab?.guest;
+    if (!tab || !guest || safeBool(() => guest.isDestroyed(), true)) {
+      return { ok: false, reason: "标签页尚未附加，无法读取响应体" };
+    }
+    // 先走 `Page.getResourceContent`：在 `<webview>` guest 上 `Network.getResponseBody`
+    // 会稳定返回 "No resource with given identifier found"（请求事件与命令在同一 root
+    // 会话，但资源表查不到），而 Page 域能从资源缓存里取回同一 URL 的内容（实测）。
+    const frame = tab.consoleResourceFrames?.get(requestId);
+    if (frame) {
+      try {
+        const content = (await this.sendGuestCdpCommand(
+          tab,
+          guest,
+          "Page.getResourceContent",
+          { frameId: frame.frameId, url: frame.url },
+        )) as { content?: unknown; base64Encoded?: unknown } | undefined;
+        if (typeof content?.content === "string") {
+          const truncated = content.content.length > BROWSER_NETWORK_MAX_BODY_BYTES;
+          return {
+            ok: true,
+            body: truncated
+              ? content.content.slice(0, BROWSER_NETWORK_MAX_BODY_BYTES)
+              : content.content,
+            base64Encoded: content.base64Encoded === true,
+            truncated,
+          };
+        }
+      } catch (error) {
+        // 非缓存资源（流式 / 跨进程 frame 已卸载）退到下一步，不在这里断言失败。
+        this.log?.(
+          `[browser-use] console resource content failed tabId=${tabId} requestId=${requestId} error=${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    try {
+      const result = (await this.sendGuestCdpCommand(
+        tab,
+        guest,
+        "Network.getResponseBody",
+        { requestId },
+      )) as { body?: unknown; base64Encoded?: unknown } | undefined;
+      if (!result || typeof result.body !== "string") {
+        return { ok: false, reason: "响应体已被浏览器回收" };
+      }
+      const truncated = result.body.length > BROWSER_NETWORK_MAX_BODY_BYTES;
+      return {
+        ok: true,
+        body: truncated ? result.body.slice(0, BROWSER_NETWORK_MAX_BODY_BYTES) : result.body,
+        base64Encoded: result.base64Encoded === true,
+        truncated,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.warn(
+        `browser console response body failed tabId=${tabId} requestId=${requestId} ` +
+          `guestId=${safeNumber(() => guest.id)} attached=${safeBool(() => guest.debugger.isAttached(), false)} ` +
+          `url=${safeStr(() => guest.getURL(), "?")}`,
+        error,
+      );
+      return {
+        ok: false,
+        reason: /No resource with given identifier/i.test(message)
+          ? "响应体不可读：资源不在页面缓存中（流式响应或已卸载的跨进程 frame）"
+          : message || "浏览器未返回响应体",
+      };
+    }
+  }
+
+  /**
+   * 更新 console tab 的可认领归属。
+   *
+   * 绑定开关切换时不重建 guest：未认领的 tab 直接改 owner 的 workspace/session；
+   * 已认领的 tab 只更新 `userOwner`（控制权仍归 Agent），收回后按新归属重新可认领。
+   */
+  updateConsoleTabBinding(
+    tabId: string,
+    input: { workspaceKey: string; sessionId: string | null },
+  ): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.consoleInstanceId || tab.lifecycle === "closed") return;
+    if (input.sessionId === null) {
+      if (tab.consoleClaimed) this.releaseToUser(tab);
+      tab.claimable = false;
+      return;
+    }
+    if (!tab.userOwner) {
+      tab.userOwner = {
+        ...tab.owner,
+        requestId: `unclaimed:${randomUUID()}`,
+        browserId: "unclaimed-iab",
+        browserGeneration: 0,
+      };
+    }
+    tab.userOwner = {
+      ...tab.userOwner,
+      workspaceKey: input.workspaceKey,
+      sessionId: input.sessionId,
+    };
+    // 已被 Agent 认领时不抢 owner；收回后 releaseToUser 会恢复新归属。
+    if (tab.consoleClaimed) return;
+    tab.owner = { ...tab.userOwner };
+    tab.origin = "user";
+    tab.claimable = true;
+  }
+
+  /** 用户关闭 AI 控制：立即把该实例下已被认领的 console tab 收回给用户。 */
+  releaseClaimedConsoleTabs(instanceId: string): void {
+    for (const tab of this.tabs.values()) {
+      if (tab.consoleInstanceId !== instanceId || !tab.consoleClaimed) continue;
+      this.releaseToUser(tab);
+      tab.claimable = false;
+    }
+  }
+
   private resolveTab(
     context: InternalExecutionContext,
     explicitTabId?: string,
@@ -2676,6 +2881,7 @@ export class BrowserGuestManager {
     if (!this.canClaimUserTab(tab, context)) return tab;
     tab.owner = { ...context };
     tab.claimable = false;
+    if (tab.consoleInstanceId) tab.consoleClaimed = true;
     // claim 只接管所有权，不改激活态；未激活的
     // human tab webview 不产帧，被 claim 后截图的 prepare 握手 3s 超时（renderer ready
     // 永不到来）。claim 即激活：与 activateTab 相同的 selectTab(tab, true) 语义——前台
@@ -2730,6 +2936,7 @@ export class BrowserGuestManager {
     tab.owner = { ...tab.userOwner };
     tab.origin = "user";
     tab.claimable = true;
+    tab.consoleClaimed = false;
     tab.lifecycle = "active";
   }
 
@@ -2791,6 +2998,7 @@ export class BrowserGuestManager {
       ...(tab.lifecycle !== "active" && tab.lifecycle !== "closed"
         ? { lifecycle: tab.lifecycle }
         : {}),
+      ...(tab.consoleInstanceId ? { instanceId: tab.consoleInstanceId } : {}),
     };
   }
 
@@ -2839,6 +3047,7 @@ export class BrowserGuestManager {
       id: tab.tabId,
       ...(tab.cachedUrl ? { url: tab.cachedUrl } : {}),
       ...(tab.cachedTitle ? { title: tab.cachedTitle } : {}),
+      ...(tab.consoleInstanceId ? { instanceId: tab.consoleInstanceId } : {}),
     };
   }
 
@@ -2978,6 +3187,8 @@ export class BrowserGuestManager {
   }
 
   private releaseGuestCdpAfterIdle(tab: ManagedTab, reason: string): void {
+    // 控制台深采集持有显式租约：空闲释放会切断 Network 事件，必须由 UI 释放后恢复。
+    if (tab.deepCapture) return;
     const guest = tab.guest;
     if (!guest || tab.guestLifecycle !== "attached") return;
     void (async () => {
@@ -3163,7 +3374,11 @@ export class BrowserGuestManager {
           error,
         );
       } finally {
-        if (this.tabs.get(tabId)?.guest === guest) tab.cdpAttached = false;
+        if (this.tabs.get(tabId)?.guest === guest) {
+          tab.cdpAttached = false;
+          // CDP 已断开，深采集租约不可能再收到事件；释放它以免空闲释放被永久抑制。
+          tab.deepCapture = false;
+        }
       }
     };
     guest.on("render-process-gone", onRenderProcessGone);
@@ -3180,6 +3395,30 @@ export class BrowserGuestManager {
     const onMessage = (_event: unknown, method: string, params: unknown): void => {
       const current = this.tabs.get(tabId);
       if (!current || current.guest !== guest || current.lifecycle === "closed") return;
+      if (method === "Network.responseReceived") {
+        const responseParams = (params ?? {}) as {
+          requestId?: unknown;
+          frameId?: unknown;
+          response?: { url?: unknown };
+        };
+        const requestId = responseParams.requestId;
+        const frameId = responseParams.frameId;
+        const responseUrl = responseParams.response?.url;
+        if (
+          typeof requestId === "string" &&
+          typeof frameId === "string" &&
+          typeof responseUrl === "string"
+        ) {
+          // 只为“读取响应体”留定位信息，不缓存内容：实测 Network.getResponseBody 在
+          // webview guest 上查不到该 requestId，改由 Page.getResourceContent 读。
+          const frames = (tab.consoleResourceFrames ??= new Map());
+          frames.set(requestId, { frameId, url: responseUrl });
+          if (frames.size > MAX_CONSOLE_RESOURCE_FRAMES) {
+            const oldest = frames.keys().next();
+            if (!oldest.done) frames.delete(oldest.value);
+          }
+        }
+      }
       if (method === "Page.javascriptDialogOpening") {
         // 打点：dialog 事件到达 main 的时刻，用于区分「事件黑洞」与「dialog 已被 detach
         // 清理」两种 getDialog=null 成因。
@@ -3197,6 +3436,9 @@ export class BrowserGuestManager {
         this.pendingDialogs.set(tabId, dialog);
       } else if (method === "Page.javascriptDialogClosed") {
         this.pendingDialogs.delete(tabId);
+      }
+      if (method.startsWith("Network.") && current.deepCapture) {
+        this.consoleNetworkEventHandler?.({ tabId, method, params });
       }
     };
     guest.debugger.on("message", onMessage);
@@ -4247,6 +4489,8 @@ export class BrowserGuestManager {
   }
 
   private detachGuest(tab: ManagedTab): void {
+    // guest 换代/销毁后旧的深采集租约已无意义；UI 会重新申请。
+    tab.deepCapture = false;
     const guest = tab.guest;
     const guestDestroyed = guest ? safeBool(() => guest.isDestroyed(), true) : true;
     if (guest && !this.guestRecoveryFlights.has(tab.tabId)) {
@@ -4254,6 +4498,9 @@ export class BrowserGuestManager {
       tab.cachedTitle = safeStr(() => guest.getTitle(), tab.cachedTitle);
     }
     this.pendingDialogs.delete(tab.tabId);
+    // 旧 guest 的 requestId 到新 guest 不再适用，留着只会让“读响应体”查到错 frame。
+    tab.consoleResourceFrames?.clear();
+    tab.consoleResourceFrames = undefined;
     try {
       // Electron 会在 renderer 卸载 <webview> 时先销毁 guest；此时 listener 已随对象释放，
       // 再调用 session.removeListener 只会产生无意义的 "Object has been destroyed" 日志。

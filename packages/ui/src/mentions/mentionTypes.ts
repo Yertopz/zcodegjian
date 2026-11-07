@@ -1,3 +1,5 @@
+import type { AgentAvatar, AgentColor } from "@zcode/shared";
+
 export type MentionCategory =
   | "files"
   | "skills"
@@ -15,6 +17,15 @@ export interface MentionItemData {
   scope?: "built-in" | "workspace" | "user" | "plugin";
   source?: "built-in" | "user" | "plugin";
   model?: string;
+  /**
+   * 子智能体条目的团队来源标记：`team` = CreateAgent 创建的多智能体成员。
+   * 与 `kind` 分开，因为后者是文件/目录/画板条目的类别。
+   */
+  agentKind?: "team";
+  /** Agent 配置色；团队成员头像缺失时用它 + 首字母做兜底。 */
+  agentColor?: AgentColor;
+  /** Agent 头像（emoji 或 data URL）；只用于面板行与 chip 展示，不进入 markdown。 */
+  agentAvatar?: AgentAvatar;
   /** Plugin 引用的稳定身份（`name@marketplace`），canonical 链接目标；label 不参与身份。 */
   pluginId?: string;
   /** Plugin 商店 listing 原始图标；仅用于 UI，必须经 HTTPS 校验后加载。 */

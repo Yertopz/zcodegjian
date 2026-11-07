@@ -52,11 +52,17 @@ export class V4CommandExecutor {
     if (!handler) {
       throw new Error(`v4 native executor does not support: ${envelope.type}`);
     }
-    return handler(this.host, {
+    const mainAgentPrompt =
+      envelope.sessionId && (envelope.type === "sendText" || envelope.type === "sendGoalCommand")
+        ? await this.host.resolveMainAgentPrompt?.(envelope.sessionId, envelope)
+        : undefined;
+    const admittedEnvelope = {
+      __mainAgentPrompt: mainAgentPrompt,
       ...envelope,
       ...(admission ? { __v4Admission: admission } : {}),
       ...(executionContext ? { __v4ExecutionContext: executionContext } : {}),
-    });
+    };
+    return handler(this.host, admittedEnvelope);
   }
 }
 

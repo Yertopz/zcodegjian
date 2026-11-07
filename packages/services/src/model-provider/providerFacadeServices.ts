@@ -82,7 +82,48 @@ export interface IProviderSettingsService {
    * 纯读操作，不修改配置；未装配拉取能力时抛错而不是回退到 renderer 直连。
    */
   fetchProviderModels(providerId: ProviderId): Promise<ProviderModelCatalogView>;
+  /**
+   * 用本机 Codex 登录态接一条 Codex 连接。
+   *
+   * 必须是 Host 侧方法：要读 `~/.codex/auth.json`、写个人 Provider 配置并刷新 Registry，
+   * renderer 既没有文件系统也没有配置写入权。写入与设置页其他改动共用同一个
+   * repository 和文件锁，返回的 view 已包含登录后的 Codex。
+   */
+  loginCodex(input: ProviderSettingsCodexLoginInput): Promise<ProviderSettingsCodexLoginResult>;
 }
+
+export interface ProviderSettingsCodexLoginInput {
+  /** Codex 凭据文件；缺省按 `CODEX_HOME` 再退回 `~/.codex/auth.json`。 */
+  readonly authFilePath?: string;
+  /** 首选模型；缺省取 Codex 模型缓存里优先级最高且可见的那个。 */
+  readonly modelId?: string;
+  /**
+   * 这条连接独占的出口代理，支持 socks5 / socks5h / http / https；
+   * 留空表示不写代理，沿用全局网络设置。
+   */
+  readonly proxyUrl?: string;
+}
+
+/**
+ * 登录写入的结论。
+ *
+ * 只带 renderer 真正用得到的字段：这份接口声明会被浏览器侧工程（ui / web）
+ * 当作声明产物消费，一旦在这里写成 Host 侧 Provider 规则类型，会把
+ * `@zcode/provider-node` 的源码拖进没有 Node 类型的工程里。
+ */
+export interface ProviderSettingsCodexLoginOutcome {
+  readonly providerId: ProviderId;
+  readonly modelId: ModelId;
+}
+
+export interface ProviderSettingsCodexLoginResult extends ProviderSettingsCodexLoginOutcome {
+  readonly view: ProviderSettingsView;
+}
+
+/** Codex 登录出口；未装配时 `loginCodex` 明确失败而不是假装成功。 */
+export type ProviderSettingsCodexLogin = (
+  input: ProviderSettingsCodexLoginInput,
+) => Promise<ProviderSettingsCodexLoginOutcome>;
 
 export interface ProviderModelCatalogView {
   readonly entries: readonly ModelCatalogEntry[];
@@ -131,6 +172,7 @@ export function createProviderSettingsService(
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
   modelCatalogFetcher?: ProviderModelCatalogFetcher,
+  codexLogin?: ProviderSettingsCodexLogin,
 ): IProviderSettingsService {
   return {
     onDidChange: toEvent((listener) => facade.onDidChange(listener)),
@@ -238,6 +280,15 @@ export function createProviderSettingsService(
       }
       const request = resolveProviderModelCatalogRequest(facade, providerId);
       return modelCatalogFetcher(request);
+    },
+    loginCodex: async (input) => {
+      await ensureReady();
+      if (!codexLogin) {
+        throw new Error("当前 Environment 未装配 Codex 登录能力");
+      }
+      const outcome = await codexLogin(input);
+      // 登录写的是配置文件；Registry 不吃文件变更事件，必须显式刷新才能让新 Provider 可执行。
+      return { ...outcome, view: await facade.refresh("codex-login") };
     },
   };
 }

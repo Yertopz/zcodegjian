@@ -4,10 +4,16 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import {
   createAgentStateId,
   createPluginAgentStateId,
+  parseAgentAvatars,
   parsePluginSubagentModelSelectionOverrides,
   DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS,
   ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
   modelSelectionSchema,
+  multiAgentSettingsPatchSchema,
+  multiAgentSettingsSchema,
+  resolveMultiAgentSettings,
+  type AgentAvatar,
+  type AgentAvatarSetParams,
   type AgentCreateParams,
   type AgentDeleteParams,
   type AgentDiagnostic,
@@ -18,6 +24,9 @@ import {
   type AgentsListResult,
   type BuiltInSubagentModelOverrideParams,
   type BuiltInSubagentModelSelectionOverrides,
+  type MultiAgentRuntimeSettings,
+  type MultiAgentSettings,
+  type MultiAgentSettingsPatch,
   type PluginSubagentModelOverrideParams,
   type PluginSubagentModelSelectionOverrides,
   type SubAgentConfig,
@@ -49,6 +58,14 @@ interface AgentsStateFile {
   builtInModelSelectionOverrides: BuiltInSubagentModelSelectionOverrides;
   pluginAgentModelSelectionOverrides: PluginSubagentModelSelectionOverrides;
   disabledAgentIds: string[];
+  /** 「多智能体」设置；缺省表示未开启。CLI 在新建会话时读同一份文件。 */
+  multiAgent?: MultiAgentSettings;
+  /**
+   * 团队成员/子智能体头像，键是 agent id（`createAgentStateId`）。
+   * 只放这里、不写 Markdown frontmatter：frontmatter 是 CLI 运行契约，头像属纯 UI 偏好，
+   * 与启停、模型覆盖同层；读取是逐字段 safeParse，新增键对旧版本与 CLI 双向兼容。
+   */
+  agentAvatars: Record<string, AgentAvatar>;
   // 仅供旧版本回滚保留；新版存在选择字段后，禁止再从这两个字段恢复覆盖。
   builtInModelOverrides?: unknown;
   builtInThoughtLevelOverrides?: unknown;
@@ -143,6 +160,7 @@ function emptyAgentsState(): AgentsStateFile {
     builtInModelSelectionOverrides: {},
     pluginAgentModelSelectionOverrides: {},
     disabledAgentIds: [],
+    agentAvatars: {},
   };
 }
 
@@ -165,8 +183,12 @@ async function readAgentStateFile(options?: SubagentsServiceOptions): Promise<Ag
       builtInModelOverrides?: unknown;
       builtInThoughtLevelOverrides?: unknown;
       disabledAgentIds?: unknown;
+      multiAgent?: unknown;
+      agentAvatars?: unknown;
     };
     const selections = normalizeBuiltInSelectionOverrides(parsed.builtInModelSelectionOverrides);
+    // 手写坏值不走 schema 报错路径：直接视为未设置，避免设置页因一处脏字段整体打不开。
+    const multiAgent = multiAgentSettingsSchema.safeParse(parsed.multiAgent);
     return {
       ...parsed,
       builtInModelSelectionOverrides: selections,
@@ -178,6 +200,9 @@ async function readAgentStateFile(options?: SubagentsServiceOptions): Promise<Ag
             (id): id is string => typeof id === "string" && id.trim().length > 0,
           )
         : [],
+      multiAgent: multiAgent.success ? multiAgent.data : undefined,
+      // 头像同样按字段容错：单个坏头像等于「没设头像」，不能让整份状态读失败。
+      agentAvatars: parseAgentAvatars(parsed.agentAvatars),
     };
   } catch {
     return emptyAgentsState();
@@ -282,10 +307,14 @@ function resolveCapabilities(options?: SubagentsServiceOptions): AgentsCapabilit
 
 function attachEnabledState(agents: AgentSummary[], state: AgentsStateFile): AgentSummary[] {
   const disabledSet = new Set(state.disabledAgentIds);
-  return agents.map((agent) => ({
-    ...agent,
-    enabled: agent.scope === "user" ? !disabledSet.has(agent.id) : true,
-  }));
+  return agents.map((agent) => {
+    const avatar = state.agentAvatars[agent.id];
+    return {
+      ...agent,
+      enabled: agent.scope === "user" ? !disabledSet.has(agent.id) : true,
+      ...(avatar ? { avatar } : {}),
+    };
+  });
 }
 
 function applyRuntimePrecedence(agents: AgentSummary[]): AgentSummary[] {
@@ -647,6 +676,22 @@ export function createSubagentsService(options?: SubagentsServiceOptions): ISuba
       await queued;
     },
 
+    async setAgentAvatar(params: AgentAvatarSetParams): Promise<void> {
+      const agentId = params.agentId.trim();
+      if (!agentId) throw new Error("无效 Agent 身份");
+      const runUpdate = async () => {
+        const state = await readAgentStateFile(storageOptions);
+        const agentAvatars = { ...state.agentAvatars };
+        if (params.avatar) agentAvatars[agentId] = params.avatar;
+        else delete agentAvatars[agentId];
+        await writeAgentStateFile({ ...state, agentAvatars }, storageOptions);
+      };
+
+      const queued = writeQueue.then(runUpdate, runUpdate);
+      writeQueue = queued.catch(() => {});
+      await queued;
+    },
+
     async setBuiltInModelOverride(params: BuiltInSubagentModelOverrideParams): Promise<void> {
       const runUpdate = async () => {
         const state = await readAgentStateFile(storageOptions);
@@ -758,7 +803,39 @@ export function createSubagentsService(options?: SubagentsServiceOptions): ISuba
       const disabledSet = new Set(state.disabledAgentIds);
       disabledSet.delete(params.agentId);
       state.disabledAgentIds = [...disabledSet].sort();
+      // 删档时一并清头像：id 会被后续同名新建复用，残留头像会挂到不相干的新成员上。
+      if (state.agentAvatars[params.agentId]) {
+        const agentAvatars = { ...state.agentAvatars };
+        delete agentAvatars[params.agentId];
+        state.agentAvatars = agentAvatars;
+      }
       await writeAgentStateFile(state, storageOptions);
+    },
+
+    async getMultiAgentConfig(): Promise<MultiAgentRuntimeSettings> {
+      const state = await readAgentStateFile(storageOptions);
+      return resolveMultiAgentSettings(state.multiAgent);
+    },
+
+    async setMultiAgentConfig(params: {
+      patch: MultiAgentSettingsPatch;
+    }): Promise<MultiAgentRuntimeSettings> {
+      // 在写队列里先读后写：并发改开关与上限时不能互相覆盖（与 setEnabled 同一串行点）。
+      const patch = multiAgentSettingsPatchSchema.parse(params.patch);
+      let resolved: MultiAgentRuntimeSettings | undefined;
+      const runUpdate = async (): Promise<void> => {
+        const state = await readAgentStateFile(storageOptions);
+        const merged = multiAgentSettingsSchema.parse({
+          ...resolveMultiAgentSettings(state.multiAgent),
+          ...patch,
+        });
+        await writeAgentStateFile({ ...state, multiAgent: merged }, storageOptions);
+        resolved = resolveMultiAgentSettings(merged);
+      };
+      const queued = writeQueue.then(runUpdate, runUpdate);
+      writeQueue = queued.catch(() => {});
+      await queued;
+      return resolved ?? resolveMultiAgentSettings(patch);
     },
   };
 }
@@ -798,15 +875,23 @@ async function migrateDisabledAgentId(
   }
   const state = await readAgentStateFile(options);
   const disabledSet = new Set(state.disabledAgentIds);
-  if (!disabledSet.has(previousAgentId)) {
+  const disabledChanged = disabledSet.delete(previousAgentId);
+  if (disabledChanged) disabledSet.add(nextAgentId);
+  // 头像同样按 agent id 存；改名会换 id，不迁移就等于用户刚设的头像被改名抹掉。
+  const agentAvatars = { ...state.agentAvatars };
+  const avatar = agentAvatars[previousAgentId];
+  if (avatar) {
+    delete agentAvatars[previousAgentId];
+    agentAvatars[nextAgentId] = avatar;
+  }
+  if (!disabledChanged && !avatar) {
     return;
   }
-  disabledSet.delete(previousAgentId);
-  disabledSet.add(nextAgentId);
   await writeAgentStateFile(
     {
       ...state,
       disabledAgentIds: [...disabledSet].sort(),
+      agentAvatars,
     },
     options,
   );

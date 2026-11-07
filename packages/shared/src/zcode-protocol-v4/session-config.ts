@@ -4,6 +4,7 @@ import { modelSelectionSchema } from "../model-selection.js";
 // ── config──
 export const sessionConfigStateSchema = z.object({
   /** Session 接受并持久化的稀疏选择意图；provider/model/thought 仅为 UI effective 投影。 */
+  mainAgentPromptId: z.string().min(1).max(128).nullable().optional(),
   modelSelection: modelSelectionSchema.optional(),
   provider: z.string(),
   model: z.string(),

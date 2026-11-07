@@ -1,6 +1,12 @@
 import { SendIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";
+import {
+  testId,
+  TID_CHAT_GROUP_CHAT_MESSAGE,
+  TID_CHAT_GROUP_CHAT_REPLY_FAILED,
+} from "@zcode/shared";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { GroupChatMemberCard } from "@/components/team/GroupChatMemberCard.js";
 import { ToolSnapshotFieldNotice } from "@/ToolCallBlocks/ToolSnapshotFieldNotice.js";
 import { ToolLayout } from "@/ToolCallBlocks/ToolLayout.js";
 import type { ToolCallBlockRenderContext } from "@/ToolCallBlocks/shared.js";
@@ -183,6 +189,67 @@ export function SendMessageToolCallBlock(context: ToolCallBlockRenderContext) {
     ),
     [intl, message, summary, target],
   );
+
+  // 群聊视图：渲染为「成员头像 + 名字 · 简介」的会话气泡，正文是派给该成员的消息本身；
+  // 详情字段不再以表单形式展开。成员信息由宿主按消息发起者解析注入；
+  // 解析不到成员时回落普通工具卡，避免群聊样式丢失成员身份。
+  const groupChatMember = context.groupChatActive ? context.groupChatMember : undefined;
+  if (groupChatMember) {
+    // 失败 / 被拒 / 被停：成员压根没跑起来。这种「没有回复」如果照常给卡片外框，
+    // 在消息流里的视觉重量和一条真回复一样，扫读时会把失败当成交付。降级成一行灰字。
+    const failureReason =
+      failureMessage ?? (statusLabelId ? intl.formatMessage({ id: statusLabelId }) : undefined);
+    if (failureReason !== undefined) {
+      return (
+        <div
+          data-testid={testId(TID_CHAT_GROUP_CHAT_REPLY_FAILED, toolCall.toolId)}
+          data-member-status="blocked"
+          className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 py-1 text-ui-sm text-foreground-subtle"
+        >
+          <span className="shrink-0 font-medium text-foreground">{groupChatMember.name}</span>
+          {groupChatMember.description ? (
+            <>
+              <span aria-hidden="true" className="shrink-0 text-foreground-subtlest">
+                ·
+              </span>
+              <span className="shrink-0">{groupChatMember.description}</span>
+            </>
+          ) : null}
+          <span className="min-w-0 break-words">
+            {intl.formatMessage(
+              { id: "chat.groupChat.members.replyFailed" },
+              { reason: failureReason },
+            )}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <GroupChatMemberCard
+        rootTestId={testId(TID_CHAT_GROUP_CHAT_MESSAGE, toolCall.toolId)}
+        member={groupChatMember}
+        className="w-full"
+      >
+        {summary ? (
+          <div className="text-ui-sm font-medium text-foreground-subtle">{summary}</div>
+        ) : null}
+        {message ? (
+          <div className="whitespace-pre-wrap break-words text-ui-base leading-5 text-foreground">
+            {message}
+          </div>
+        ) : null}
+        {target ? (
+          <div className="text-ui-sm text-foreground-subtlest">
+            <span className="inline-flex items-center gap-1">
+              <SendIcon className="size-3 shrink-0" />
+              <code className="font-mono">{target}</code>
+            </span>
+          </div>
+        ) : null}
+      </GroupChatMemberCard>
+    );
+  }
 
   return (
     <>

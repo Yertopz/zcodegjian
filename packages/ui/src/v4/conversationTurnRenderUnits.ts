@@ -282,6 +282,7 @@ function materializeDraftUnit(
     timelineOnly,
     nowMs: options.nowMs,
     ...(options.pluginUiPinResolver ? { pluginUiPinResolver: options.pluginUiPinResolver } : {}),
+    ...(options.visibleWorkRowIds ? { visibleWorkRowIds: options.visibleWorkRowIds } : {}),
   });
   const orderedAssistantHistoryRows = workSegments.flatMap(
     (segment) => segment.assistantHistoryRows,

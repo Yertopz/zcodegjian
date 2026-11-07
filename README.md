@@ -32,6 +32,8 @@ ZCode-CE 基于 [zai-org/ZCode](https://github.com/zai-org/ZCode)（Apache-2.0�
 | **无头服务器 + 浏览器面板** | 把「服务端 + 浏览器面板」作为一条独立使用路径：可跑在**没有桌面环境的机器**上，用同一局域网/私网内的浏览器（**含手机窄屏**）操作**这台机器上的工作台**。**它不接管桌面端**：不是接管桌面端正在开的会话，桌面端已连的远端 SSH / Docker 目标**不会**共享给浏览器。**默认只监听回环 `127.0.0.1`**；要对外监听**必须**同时给令牌，否则拒绝启动。自托管、**不经任何中继**、不采集遥测；不是官方那套「登录 + 云 relay + Android 壳」（客户端随上游开源树分发，中继与配对服务端闭源；本仓库不引入）。**IM 机器人（Bot Channel）已与官方同步**：默认关闭、用户同意后可用，桌面端带有管理面板（建机器人 / 绑定 IM 渠道 / 授权工作区 / 配命令白名单）。见[网页远控](docs/development/web-remote-control.md)与[Bot 管理面板](docs/development/bot-management-ui.md) |
 | **工具权限可控**            | 危险命令**不生成宽泛的持久授权**（记住 `sudo apt install foo` 只记住这一条，不会记住「`sudo apt install` 任意包」）；授权弹窗**显示真实范围**（任意 / 前缀 / 精确三种都列出）；设置里提供「工具与权限」页管理危险命令清单与持久授权策略；自主模式下执行危险命令前会先弹出确认（说明将要执行什么、为什么被判为危险），确认粒度可在设置里调整，与既有的清单策略并存                                                                                                                                                                                                                                                                                                                                                                                        |
 
+本地定制还包括[主提示词模式](docs/development/178-main-agent-prompts.md)、[浏览器控制台](docs/development/176-browser-console.md)和 [SSH 服务工作台](docs/development/177-ssh-server-workbench-plan.md)。
+
 ### 我们不是什么
 
 - **不是官方发行版**。ZCode-CE 由社区维护，不代表 Z.ai 或智谱的官方立场。

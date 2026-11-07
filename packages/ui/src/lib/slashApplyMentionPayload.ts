@@ -1,4 +1,5 @@
 import type { PromptInputSuggestionItem } from "@/lib/promptInputTriggers.js";
+import { isAgentMentionItemId } from "@/mentions/agentMentionIds.js";
 import {
   buildSkillMentionMarkdown,
   buildSubagentMentionMarkdown,
@@ -22,7 +23,9 @@ export function buildSlashApplyMentionPayload(
     };
   }
 
-  if (suggestion.id.startsWith("subagent:")) {
+  // 团队成员与子智能体在 `/` 面板是两种前缀、同一 token 语义（`@名字`），
+  // 这里按前缀族统一回填，避免团队成员被误判成普通斜杠命令。
+  if (isAgentMentionItemId(suggestion.id)) {
     return {
       id: suggestion.id,
       category: "subagents",

@@ -3,6 +3,8 @@
 import { existsSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import process from "node:process";
+import { prepareServerRdp } from "./prepare-server-rdp.mjs";
+await prepareServerRdp();
 import {
   resolveNativeSearchBuildPlan,
   resolveNativeSearchReleasePlan,

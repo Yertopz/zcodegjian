@@ -22,6 +22,11 @@ import {
 } from "./scripts/desktop-product-identity.mjs";
 import { verifyStagedCuaDriver } from "./scripts/cua-driver-package-assets.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
+import {
+  applyWindowsExecutableResources,
+  assertWindowsExecutableResources,
+  buildWindowsExecutableMetadata,
+} from "./scripts/windows-executable-resources.mjs";
 const ELECTRON_BUILDER_ARCH = {
   1: "x64",
   3: "arm64",
@@ -492,6 +497,38 @@ function assertPackagedKoffi(context) {
   }
 }
 
+/**
+ * Windows exe 的图标与版本资源必须由我们自己写入。
+ *
+ * 为什么不用 electron-builder 的 `signAndEditExecutable`：那条路径在 Windows 上会调用
+ * app-builder 的 `rcedit`，而 rcedit 来自需要联网下载的 winCodeSign 包，解压还依赖 PATH
+ * 里的 `7za`（包内带 macOS 符号链接，未启用开发者模式的 Windows 会解压失败）。本仓库
+ * 的 Windows 包不签名，因此关掉该开关、改用纯 JS 的 resedit 重写 PE 资源，离线且稳定。
+ *
+ * 代价是：不补这一步，exe 会保留 Electron 默认图标和 "Electron / GitHub, Inc." 元数据，
+ * 桌面/开始菜单/任务栏固定图标全部显示成 Electron，而构建全程绿灯。所以这里写完后
+ * 立刻回读校验，缺失即让出包失败。
+ */
+async function writeWindowsExecutableResources(context) {
+  const appInfo = context.packager.appInfo;
+  const executablePath = resolve(context.appOutDir, `${appInfo.productFilename}.exe`);
+  const iconPath = resolve(desktopPackageRoot, "build", "icon.ico");
+  const metadata = buildWindowsExecutableMetadata({
+    productName: appInfo.productName,
+    productFilename: appInfo.productFilename,
+    version: appInfo.version,
+    companyName: appInfo.companyName ?? appInfo.productName,
+    copyright: appInfo.copyright,
+  });
+  await runTimedAsync("afterPack:applyWindowsExecutableResources", () =>
+    applyWindowsExecutableResources({ executablePath, iconPath, metadata }),
+  );
+  const resources = await runTimedAsync("afterPack:assertWindowsExecutableResources", () =>
+    assertWindowsExecutableResources({ executablePath, iconPath, metadata }),
+  );
+  console.log(`[afterPack] windows exe resources: icons=${resources.icons.join(",")}`);
+}
+
 /** @type {import("electron-builder").Configuration} */
 export default {
   appId: desktopProductIdentity.appId,
@@ -606,12 +643,16 @@ export default {
     runTimedSync("afterPack:assertPackagedCuaDriver", () => assertPackagedCuaDriver(context));
     runTimedSync("afterPack:assertPackagedKoffi", () => assertPackagedKoffi(context));
     if (actualWindowsTarget) {
+      await runTimedAsync("afterPack:writeWindowsExecutableResources", () =>
+        writeWindowsExecutableResources(context),
+      );
       await runTimedAsync("afterPack:writeWindowsInstallManifest", () =>
         writeWindowsInstallManifest(context),
       );
     }
   },
   extraResources: [
+    ...(targetPlatform.os === "win32" ? [{ from: "resources/server-rdp", to: "server-rdp" }] : []),
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
     ...(targetPlatform.os === "darwin"
       ? [
@@ -776,6 +817,12 @@ export default {
   win: {
     target: ["nsis"],
     artifactName: buildDesktopArtifactName("win"),
+    // 关掉 electron-builder 的 exe 资源编辑（图标 + 版本信息）：它在 Windows 上要走 app-builder
+    // 的 rcedit，需要联网下载 winCodeSign 并用 PATH 里的 7za 解压，而该包带 macOS 符号链接，
+    // 未启用开发者模式的 Windows 会解压失败。改为 afterPack 用纯 JS 的 resedit 写入并回读校验，
+    // 见 writeWindowsExecutableResources / scripts/windows-executable-resources.mjs。
+    // 注意：这里一并关掉了 exe 的代码签名，本仓库的 Windows 包本来就是无证书的。
+    signAndEditExecutable: false,
   },
   linux: {
     target: ["AppImage", "deb", "rpm", "pacman"],

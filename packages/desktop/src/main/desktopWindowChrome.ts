@@ -10,9 +10,11 @@ import type {
 } from "electron";
 import type { DesktopTitleBarTheme, Locale } from "@zcode/shared";
 import {
+  DEFAULT_BROWSER_INSTANCE_PARTITION,
   DEFAULT_LOCALE,
   desktopMenuMessageIds,
   getDesktopMenuMessage,
+  isBrowserConsolePartition,
   isTrustedCodingPlanWebviewOrigin,
   resolveZaiBusinessBaseUrl,
   PlatformChannels,
@@ -31,11 +33,16 @@ import {
   resolveDesktopZoomLevelFromFactor,
 } from "./desktopZoom.js";
 import { resolveDesktopWindowChromeState } from "./desktopWindowChromeState.js";
+import { createDesktopRendererCrashRecovery } from "./desktopRendererCrashRecovery.js";
 // F9(上游 aac47556):did-attach-webview 上为 browser guest 安装蓝牙设备选择守卫。
 import { installEmbeddedBrowserBluetoothDeviceGuard } from "./embeddedBrowserBluetoothGuard.js";
 import { getEmbeddedBrowserDevicePicker } from "./embeddedBrowserPermissionUiBridge.js";
 // F5(上游 aac47556):will/did-attach-webview 的插件 UI 沙箱分支。
 import { getPluginSandboxHost, isPluginSandboxSrc } from "./pluginSandbox/index.js";
+import {
+  consumeBrowserConsoleGuestAttach,
+  isRegisteredBrowserConsolePartition,
+} from "./browserConsole/browserConsolePartitionGuard.js";
 import {
   MIN_DESKTOP_WINDOW_HEIGHT,
   MIN_DESKTOP_WINDOW_WIDTH,
@@ -631,10 +638,24 @@ export function createBrowserWindow(options: {
     syncWindowControlsOverlayForZoomLevel(win, initialDesktopZoomLevel);
     syncWindowFullscreenState(win);
   });
+  // GPU/native 崩溃会让 renderer 消失但保留 BrowserWindow，用户只会看到灰色空壳。
+  // 只重载现有 WebContents，dom-ready 会沿既有路径重新挂回同一个 window Host。
+  const rendererCrashRecovery = createDesktopRendererCrashRecovery({
+    isWindowDestroyed: () => win.isDestroyed(),
+    reload: () => win.webContents.reload(),
+    logger: options.logger,
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    rendererCrashRecovery.onRendererGone(details);
+  });
+  win.webContents.on("did-finish-load", () => {
+    rendererCrashRecovery.onLoadFinished();
+  });
   win.webContents.on(
     "did-fail-load",
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) return;
+      rendererCrashRecovery.onMainFrameLoadFailed();
       // 导航失败时 CDP target 元数据可能仍保留原 file:// URL，而 renderer
       // 实际 document 已经进入 chrome-error://；记录主 frame 失败才能定位真实导航根因。
       options.logger.warn("[desktop-window] renderer did-fail-load", {
@@ -671,6 +692,26 @@ export function createBrowserWindow(options: {
       }
       pendingWebviewGuestKinds.push({ kind: "pluginSandbox", sandboxId: decision.sandboxId });
       return;
+    }
+
+    // 控制台实例使用独立持久 partition。只按 partition 放行会让被攻陷的 renderer 用
+    // A 实例的 partition 加载 B 实例页面；控制台必须先经 IPC 登记一次性 attach 许可。
+    const partition = params.partition ?? webPreferences.partition;
+    if (isBrowserConsolePartition(partition)) {
+      if (
+        !isRegisteredBrowserConsolePartition(partition) ||
+        !consumeBrowserConsoleGuestAttach({ windowId: win.id, partition })
+      ) {
+        options.logger.warn(
+          `[browser-console] blocked unregistered console webview partition: ${partition}`,
+        );
+        event.preventDefault();
+        return;
+      }
+    } else if (partition === DEFAULT_BROWSER_INSTANCE_PARTITION) {
+      // 默认实例与侧边栏浏览器共用 partition。控制台 tab 创建前会登记许可；
+      // 侧边栏旧路径没有许可，仍按既有行为放行。
+      consumeBrowserConsoleGuestAttach({ windowId: win.id, partition });
     }
     const isCodingPlanWebview = isCodingPlanEmbeddedWebviewSrc(targetUrl);
     webPreferences.preload = isCodingPlanWebview

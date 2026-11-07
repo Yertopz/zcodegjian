@@ -38,12 +38,43 @@ import type {
   BrowserViewRestoredTabShell,
   BrowserViewRestoreTabsRequest,
   BrowserViewportSize,
+  BrowserConsoleClearInstanceDataRequest,
+  BrowserConsoleDeleteResult,
+  BrowserConsoleInstanceMutationResult,
+  BrowserConsolePrepareGuestAttachRequest,
+  BrowserConsolePrepareGuestAttachResult,
+  BrowserConsoleTabIdRequest,
+  BrowserConsoleTabRegisterRequest,
+  BrowserConsoleTabRegisterResult,
+  BrowserConsoleTabUnregisterResult,
+  BrowserConsoleOpenTabPayload,
+  BrowserInstanceCreateRequest,
+  BrowserInstanceIdRequest,
+  BrowserInstanceRecord,
+  BrowserInstanceUpdateRequest,
+  BrowserConsoleAgentBindingChangedPayload,
+  BrowserConsoleAgentBindingLookup,
+  BrowserConsoleSetAgentBindingRequest,
+  BrowserConsoleSetAgentBindingResult,
+  BrowserConsoleGetAgentBindingRequest,
+  BrowserConsoleDeepCaptureResult,
+  BrowserConsoleNetworkSnapshotResult,
+  BrowserNetworkBatchPayload,
+  BrowserNetworkClearRequest,
+  BrowserNetworkDeepCaptureRequest,
+  BrowserNetworkExportHarRequest,
+  BrowserNetworkHarExportResult,
+  BrowserNetworkResponseBodyRequest,
+  BrowserNetworkResponseBodyResult,
+  BrowserNetworkSnapshotRequest,
+  BrowserNetworkSubscribeRequest,
   DesktopZoomState,
   DesktopWindowChromeState,
   DesktopCloseToTrayCapability,
   DesktopCommandId,
   DesktopTitleBarTheme,
   EmbeddedBrowserOpenUrlRequest,
+  EmbeddedBrowserDataClearResult,
   Locale,
   OAuthStateRegistration,
   OpenInEditorOptions,
@@ -412,6 +443,32 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.on(PlatformChannels.BrowserViewReady, handler);
     return () => ipcRenderer.removeListener(PlatformChannels.BrowserViewReady, handler);
   },
+  /** 网络采集批次（浅采集与 CDP 深采集共用；仅人类 UI，不向 Agent 暴露）。 */
+  onBrowserConsoleNetworkBatch: (
+    callback: (payload: BrowserNetworkBatchPayload) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, payload: BrowserNetworkBatchPayload) => callback(payload);
+    ipcRenderer.on(PlatformChannels.BrowserConsoleNetworkBatch, handler);
+    return () => ipcRenderer.removeListener(PlatformChannels.BrowserConsoleNetworkBatch, handler);
+  },
+  /** 绑定被外部清除（如实例删除）。 */
+  onBrowserConsoleAgentBindingChanged: (
+    callback: (payload: BrowserConsoleAgentBindingChangedPayload) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, payload: BrowserConsoleAgentBindingChangedPayload) =>
+      callback(payload);
+    ipcRenderer.on(PlatformChannels.BrowserConsoleAgentBindingChanged, handler);
+    return () =>
+      ipcRenderer.removeListener(PlatformChannels.BrowserConsoleAgentBindingChanged, handler);
+  },
+  /** 已绑定会话的 newTab 落在控制台实例。 */
+  onBrowserConsoleOpenTab: (
+    callback: (payload: BrowserConsoleOpenTabPayload) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, payload: BrowserConsoleOpenTabPayload) => callback(payload);
+    ipcRenderer.on(PlatformChannels.BrowserConsoleOpenTab, handler);
+    return () => ipcRenderer.removeListener(PlatformChannels.BrowserConsoleOpenTab, handler);
+  },
   /** 注册 agent browser-use 命中真实 tab 的操作状态回调，返回 disposer。 */
   onBrowserViewOperation: (
     callback: (payload: BrowserViewOperationPayload) => void,
@@ -673,6 +730,7 @@ contextBridge.exposeInMainWorld("zcode", {
     workspaceKey?: string;
     remoteSessionId?: string;
     sessionId?: string;
+    consoleInstanceId?: string;
     residencyGeneration?: number;
   }): Promise<BrowserGuestAttachResult> =>
     ipcRenderer.invoke(PlatformChannels.BrowserViewAttachGuest, payload),
@@ -700,6 +758,75 @@ contextBridge.exposeInMainWorld("zcode", {
   /** 清理内置浏览器缓存或全部站点数据。 */
   clearEmbeddedBrowserData: (mode: "cache" | "all") =>
     ipcRenderer.invoke(PlatformChannels.ClearEmbeddedBrowserData, mode),
+  /** 浏览器控制台实例（多实例 / 独立代理）。 */
+  browserConsoleListInstances: (): Promise<BrowserInstanceRecord[]> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleListInstances),
+  browserConsoleCreateInstance: (
+    input: BrowserInstanceCreateRequest,
+  ): Promise<BrowserConsoleInstanceMutationResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleCreateInstance, input),
+  browserConsoleUpdateInstance: (
+    input: BrowserInstanceUpdateRequest,
+  ): Promise<BrowserConsoleInstanceMutationResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleUpdateInstance, input),
+  browserConsoleDeleteInstance: (
+    input: BrowserInstanceIdRequest,
+  ): Promise<BrowserConsoleDeleteResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleDeleteInstance, input),
+  browserConsolePrepareGuestAttach: (
+    input: BrowserConsolePrepareGuestAttachRequest,
+  ): Promise<BrowserConsolePrepareGuestAttachResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsolePrepareGuestAttach, input),
+  browserConsoleClearInstanceData: (
+    input: BrowserConsoleClearInstanceDataRequest,
+  ): Promise<EmbeddedBrowserDataClearResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleClearInstanceData, input),
+  /** 控制台 tab 归属：创建 webview 前登记，关闭时释放。 */
+  browserConsoleRegisterTab: (
+    input: BrowserConsoleTabRegisterRequest,
+  ): Promise<BrowserConsoleTabRegisterResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleRegisterTab, input),
+  browserConsoleUnregisterTab: (
+    input: BrowserConsoleTabIdRequest,
+  ): Promise<BrowserConsoleTabUnregisterResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleUnregisterTab, input),
+  /** 网络浅采集（webRequest）。 */
+  browserConsoleNetworkSubscribe: (
+    input: BrowserNetworkSubscribeRequest,
+  ): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleNetworkSubscribe, input),
+  browserConsoleNetworkSnapshot: (
+    input: BrowserNetworkSnapshotRequest,
+  ): Promise<BrowserConsoleNetworkSnapshotResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleNetworkSnapshot, input),
+  browserConsoleNetworkClear: (input: BrowserNetworkClearRequest): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleNetworkClear, input),
+  browserConsoleNetworkExportHar: (
+    input: BrowserNetworkExportHarRequest,
+  ): Promise<BrowserNetworkHarExportResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleNetworkExportHar, input),
+  /** CDP 深采集租约与响应体。 */
+  browserConsoleAcquireDeepCapture: (
+    input: BrowserNetworkDeepCaptureRequest,
+  ): Promise<BrowserConsoleDeepCaptureResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleAcquireDeepCapture, input),
+  browserConsoleReleaseDeepCapture: (
+    input: BrowserNetworkDeepCaptureRequest,
+  ): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleReleaseDeepCapture, input),
+  browserConsoleGetResponseBody: (
+    input: BrowserNetworkResponseBodyRequest,
+  ): Promise<BrowserNetworkResponseBodyResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleGetResponseBody, input),
+  /** 「AI 控制此浏览器」显式绑定。 */
+  browserConsoleSetAgentBinding: (
+    input: BrowserConsoleSetAgentBindingRequest,
+  ): Promise<BrowserConsoleSetAgentBindingResult> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleSetAgentBinding, input),
+  browserConsoleGetAgentBinding: (
+    input: BrowserConsoleGetAgentBindingRequest,
+  ): Promise<BrowserConsoleAgentBindingLookup> =>
+    ipcRenderer.invoke(PlatformChannels.BrowserConsoleGetAgentBinding, input),
   /** 读取开发态 stdio tap proxy 开关状态 */
   getZCodeStdioTapDevState: (): Promise<ZCodeStdioTapDevState> =>
     ipcRenderer.invoke(PlatformChannels.GetZCodeStdioTapDevState),

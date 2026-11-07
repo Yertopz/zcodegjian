@@ -6,6 +6,9 @@ export {
   IProviderSettingsService,
   type ModelSelectionView,
   type ModelSelectionViewInput,
+  type ProviderSettingsCodexLoginInput,
+  type ProviderSettingsCodexLoginOutcome,
+  type ProviderSettingsCodexLoginResult,
   type ProviderSettingsProviderView,
   type ProviderSettingsView,
 } from "./model-provider/providerFacadeServices.js";
@@ -370,3 +373,4 @@ export type {
   BotSaveBotParams,
   BotTestResult,
 } from "./bots/bots.js";
+export { IServerWorkbenchService } from "./server-workbench/contract.js";

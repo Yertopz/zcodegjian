@@ -45,7 +45,9 @@ import { isSubagentDispatchToolName } from "../../tool/compat.js";
 import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/capability.js";
 import { getSessionShellEnvironment } from "./session-shell-environment.js";
 import { deriveChildClientPorts } from "../helpers/child-client-ports.js";
+import { createChildMultiAgentSettings, resolvePeerMessageBudgetLimit } from "../helpers/multi-agent-config.js";
 import { createCoordinatorResponsePort } from "../../subagent/coordinator-response.js";
+import { createPeerMessageBudget, createPeerSubagentPort } from "../../subagent/peer-message.js";
 import { isStaleBranchRuntimeTaskEvent } from "./runtime-command-generation.js";
 import { loadPersistentAgentMemory } from "../../subagent/persistent-memory.js";
 import {
@@ -64,12 +66,24 @@ export function createDefaultSubagentPort(
     return undefined;
   }
 
+  // 「多智能体」把 @ 次数交给设置页（默认 8），非团队会话沿用固定 32 次的同伴预算。
+  const peerMessageBudget = createPeerMessageBudget(resolvePeerMessageBudgetLimit(this.config));
   return createExploreSubagentPort({
     logger: this.logger,
+    ...(this.config.multiAgent
+      ? {
+          multiAgent: {
+            enabled: this.config.multiAgent.enabled,
+            mentionLimit: this.config.multiAgent.mentionLimit,
+          },
+        }
+      : {}),
     inactivityTimeoutMs: this.config.subagents?.inactivityTimeoutMs,
     autoBackgroundMs: this.config.subagents?.autoBackgroundMs,
     outputRootDir: this.config.subagents?.outputRootDir,
-    profiles: this.config.subagents?.profiles,
+    // 现读函数而不是快照：`CreateAgent` 追加成员时替换的是 `config.subagents.profiles`，
+    // 快照会让刚创建的成员在 `@` / `SendMessage` 路由里被判成未知成员。
+    profiles: () => this.config.subagents?.profiles,
     builtInModelSelectionOverrides: this.config.subagents?.builtInModelSelectionOverrides,
     runtimeTaskRegistry: this.runtimeTaskRegistry,
     emitParentEvent: async (event, traceContext) => {
@@ -286,6 +300,9 @@ export function createDefaultSubagentPort(
             backgroundBashMaxMs: this.config.subagents?.backgroundBashMaxMs,
             enabled: false,
           },
+          // 团队模式不向下传递：child 永远是 `enabled: false`（不派生、不再组队），
+          // 只保留「创建者」身份，让多智能体里被指定的成员能调用 CreateAgent。
+          multiAgent: createChildMultiAgentSettings(this.config.multiAgent, request.agentId),
           mcp: childMcpAccess.config,
         },
         {
@@ -306,6 +323,15 @@ export function createDefaultSubagentPort(
           // 桌面 UI 只认识父 task 的 sessionId。派生收敛在 deriveChildClientPorts 一处，
           // dwf actor 与 legacy workflow child 走同一条。
           ...childClientPorts,
+          subagentPort: createPeerSubagentPort({
+            registry: this.runtimeTaskRegistry,
+            parentSessionId: this.sessionId,
+            senderAgentId: request.agentId,
+            senderSessionId: request.sessionId,
+            getBranchGeneration: () => this.branchGeneration,
+            isShuttingDown: () => this.shuttingDown,
+            budget: peerMessageBudget,
+          }),
           coordinatorResponsePort: createCoordinatorResponsePort({
             agentId: request.agentId,
             agentType: request.agentType,

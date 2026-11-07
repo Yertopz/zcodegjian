@@ -230,6 +230,7 @@ function hookExecutionDisplayName(
 export interface SessionConfigSeed {
   permissionGrant?: { interactionId: string };
   planEnabled?: boolean;
+  mainAgentPromptId?: string | null;
   modelSelection?: ModelSelectedPayload["modelSelection"];
   provider?: string;
   model?: string;
@@ -314,6 +315,7 @@ export interface ConversationEditTarget {
     requestedDelivery?: "auto" | "startNow" | "queue" | "guide";
     admittedDelivery?: "startNow" | "queue" | "guide";
     fallbackReasonCode?: string;
+    mainAgentPrompt?: TurnInputIntentMetadata["mainAgentPrompt"];
     modelSelection?: TurnInputIntentMetadata["modelSelection"];
     mode?: TurnInputIntentMetadata["mode"];
     planEnabled?: boolean;
@@ -557,6 +559,10 @@ export class ProductProjection {
   seedConfig(seed: SessionConfigSeed): void {
     const config = { ...this.snapshot.config };
     let changed = false;
+    if (seed.mainAgentPromptId !== undefined && config.mainAgentPromptId === undefined) {
+      config.mainAgentPromptId = seed.mainAgentPromptId;
+      changed = true;
+    }
     if (!config.permissionGrant && seed.permissionGrant) {
       config.permissionGrant = seed.permissionGrant;
       changed = true;
@@ -1357,6 +1363,15 @@ export class ProductProjection {
         return this.onStreamRecoveryTailDiscarded(event);
       case SessionEventType.StreamRecoveryRetryStarted:
         return this.onStreamRecoveryRetryStarted(event);
+      case SessionEventType.MainAgentPromptSelected: {
+        const { id } = event.payload as { id: string | null };
+        return [
+          {
+            op: "state.updated",
+            patch: { config: { ...this.snapshot.config, mainAgentPromptId: id } },
+          },
+        ];
+      }
       case SessionEventType.ModelSelected:
         return this.onModelSelected(event);
       case SessionEventType.ModelComplete:
@@ -2071,6 +2086,7 @@ export class ProductProjection {
                 ...(fact.fallbackReasonCode ? { fallbackReasonCode: fact.fallbackReasonCode } : {}),
                 ...(fact.modelSelection ? { modelSelection: fact.modelSelection } : {}),
                 ...(fact.mode ? { mode: fact.mode } : {}),
+                mainAgentPrompt: fact.mainAgentPrompt ?? null,
                 ...(fact.planEnabled !== undefined ? { planEnabled: fact.planEnabled } : {}),
                 ...(fact.provenance ? { provenance: fact.provenance } : {}),
               },
@@ -3377,6 +3393,7 @@ export class ProductProjection {
       // 旧的正文编辑事件可能没有 intent，只能保留同项原事实，不能读取当前 Session 补值。
       modelSelection: payload.intent?.modelSelection ?? existing?.modelSelection,
       mode: payload.intent?.mode ?? existing?.mode,
+      mainAgentPrompt: payload.intent?.mainAgentPrompt ?? existing?.mainAgentPrompt ?? null,
       planEnabled: payload.intent?.planEnabled ?? existing?.planEnabled,
       sharedContextRefs: payload.intent?.sharedContextRefs ?? existing?.sharedContextRefs,
       provenance: payload.intent?.provenance ?? existing?.provenance,
@@ -3510,6 +3527,7 @@ export class ProductProjection {
           text: queueItem.text,
           ...(queueItem.modelSelection ? { modelSelection: queueItem.modelSelection } : {}),
           ...(queueItem.mode ? { mode: queueItem.mode } : {}),
+          mainAgentPrompt: queueItem.mainAgentPrompt ?? null,
           ...(queueItem.planEnabled !== undefined ? { planEnabled: queueItem.planEnabled } : {}),
           admissionSeq: queueItem.order.admissionSeq,
           admittedAt: queueItem.admittedAt,
@@ -3602,6 +3620,7 @@ export class ProductProjection {
                   ? { modelSelection: item.intent.modelSelection }
                   : {}),
                 ...(item.intent?.mode ? { mode: item.intent.mode } : {}),
+                mainAgentPrompt: item.intent?.mainAgentPrompt ?? null,
                 ...(item.intent?.planEnabled !== undefined
                   ? { planEnabled: item.intent.planEnabled }
                   : {}),
@@ -3972,6 +3991,7 @@ export class ProductProjection {
         agentId: row.entityId,
         ...(row.parentToolCallId ? { toolCallId: row.parentToolCallId } : {}),
         subagentType: row.subagentType,
+        ...(row.agentKind ? { agentKind: row.agentKind } : {}),
         title,
         status: waitingChildIds.has(childSessionId)
           ? "waiting"
@@ -4064,6 +4084,9 @@ export class ProductProjection {
 
   private onSubagentSpawned(event: SessionEvent): ConversationDelta[] {
     const payload = event.payload as Record<string, unknown>;
+    // 团队成员在事件里带 agentKind: "team"（core runner 按 profile.kind 写入）；
+    // 行投影必须原样透出，否则 UI 只能凭 agentType 去猜，成员又被显示成子智能体。
+    const teamAgentKind = this.stringPayload(payload, "agentKind") === "team" ? ("team" as const) : undefined;
     const agentId = this.subagentAgentId(payload, event);
     const existing = this.findSubagentLifecycleRow(agentId, payload, event);
     if (existing) this.subagentRowIdByAgentId.set(agentId, existing.rowId);
@@ -4095,6 +4118,7 @@ export class ProductProjection {
         // 已存在的锚点不能作为生命周期字段被覆盖，否则 UI 无法再关联原 Agent 行。
         ...(!existing.parentToolCallId && parentToolCallId ? { parentToolCallId } : {}),
         ...(childSessionId ? { childSessionId } : {}),
+        ...(teamAgentKind ? { agentKind: teamAgentKind } : {}),
         ...(payload.background === true ? { backgrounded: true as const } : {}),
         ...(payload.background === true ? { workId: agentId } : {}),
         startedAt: this.ms(event),
@@ -4121,6 +4145,7 @@ export class ProductProjection {
       ...(this.stringPayload(payload, "childSessionId")
         ? { childSessionId: this.stringPayload(payload, "childSessionId") }
         : {}),
+      ...(teamAgentKind ? { agentKind: teamAgentKind } : {}),
       ...(payload.background === true ? { backgrounded: true as const } : {}),
       ...(payload.background === true ? { workId: agentId } : {}),
       startedAt: this.ms(event),
@@ -4219,6 +4244,9 @@ export class ProductProjection {
               }
             : {}),
           subagentType: this.stringPayload(payload, "agentType") ?? "subagent",
+          ...(this.stringPayload(payload, "agentKind") === "team"
+            ? { agentKind: "team" as const }
+            : {}),
           status,
           summaryText,
           ...(this.stringPayload(payload, "childSessionId")

@@ -14,6 +14,13 @@
 | **上游跟进**         | 以逐特性移植跟进开源基线（不整树 merge），遥测每次重新剔除；台账见 [上游同步](upstream-sync.md)。                                                                |
 | **文档与合规**       | 公开文档只放当前事实与契约；一次性记录在私有工作区。许可材料的 `reviewRequired` 闭环仍未完成（上游材料本身不全）。                                               |
 
+## 本地定制验收
+
+- [SSH 服务工作台](177-ssh-server-workbench-plan.md)：真实 SSH/SFTP、Windows RDP 和安装包验证尚待完成；macOS/Linux 的 RDP 原生适配器未实现。
+- [浏览器控制台](176-browser-console.md)：多实例、代理及页面和网络面板按独立分区治理；真实平台与安全边界需要持续回归。
+- [供应商级出口代理](185-provider-egress-proxy.md)：CLI 模型请求已按供应商走 SOCKS5/HTTP 代理；桌面端供应商管理请求仍只认全局 HTTP 代理，设置页还没有代理字段的编辑入口。
+- [Codex 连接](186-codex-login.md)：`zcode login codex` 已落地 —— 读本机 Codex 登录态建立 `codex` 供应商，模型清单取 `models_cache.json`（文件缺失时回落内置快照），出口代理按这条连接单独指定。未落地的两项：access token 到期不会自动轮换（重跑命令即可，Codex 自己续期的凭据也能直接复用），以及设置页对 `network` 字段的编辑入口（同上）。
+
 ## 有意不做（写清原因，防后人误以为漏了）
 
 | 条目                                                                      | 原因                                                                                                                                                                                                                                                                                                                                                     |

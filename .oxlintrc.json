@@ -61,6 +61,8 @@
     ".agents/skills",
     "packages/formal-proof",
     "apps/zcode-cli",
-    "docs/electron"
+    "docs/electron",
+    "codex-yinzi-media-workflow-main",
+    "frakio-work"
   ]
 }

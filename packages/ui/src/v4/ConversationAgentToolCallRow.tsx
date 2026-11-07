@@ -6,6 +6,8 @@ import type { ConversationAssistantWorkRenderItem } from "@/v4/conversationAssis
 import type { ConversationRowRenderContext } from "@/v4/conversationRowContext.js";
 import { toolCallRowToLegacyNode } from "@/v4/toolCallRowAdapter.js";
 import { runUserAction } from "@/lib/userActionTelemetry.js";
+import { useHasV4Conversation } from "@/v4/V4ConversationContext.js";
+import { ConversationAgentReply } from "@/v4/ConversationAgentReply.js";
 
 function openSubagentSessionFromSummary({
   backgrounded: _backgrounded = false,
@@ -46,6 +48,7 @@ export function ConversationAgentToolCallRow({
   const toolCallNode = useMemo(() => toolCallRowToLegacyNode(item.row), [item.row]);
   const childSessionId = item.subagentRow.childSessionId;
   const subagentType = item.subagentRow.subagentType;
+  const hasConversation = useHasV4Conversation();
   // 与 Agent 摘要行复用同一 title resolver，保证右侧 tab 和用户点击的可见标题逐字一致。
   const title = getAgentPrimaryText(toolCallNode.toolCall, "");
   const canOpenChildSession = Boolean(
@@ -92,6 +95,20 @@ export function ConversationAgentToolCallRow({
         agentSummaryAction={agentSummaryAction}
         authoritativeAgentType={subagentType}
       />
+      {hasConversation &&
+      childSessionId &&
+      childSessionId !== context.sessionId &&
+      item.subagentRow.startedAt !== undefined &&
+      (item.subagentRow.status === "running" || item.subagentRow.status === "success") ? (
+        <ConversationAgentReply
+          childSessionId={childSessionId}
+          startedAt={item.subagentRow.startedAt}
+          agentName={subagentType}
+          context={context}
+          running={item.subagentRow.status === "running"}
+          onOpen={canOpenChildSession ? handleOpenChildSession : undefined}
+        />
+      ) : null}
     </div>
   );
 }

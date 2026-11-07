@@ -5,6 +5,7 @@ import {
   updateConfig,
   setExecutionState,
 } from "./config.js";
+import { getMainAgentPromptId, setMainAgentPrompt } from "./main-agent-prompt.js";
 import { getMode, getPlanEnabled } from "./config.js";
 import { getSessionModelSelection, setSessionModelSelection } from "./config.js";
 import { getProjectId } from "./config.js";
@@ -201,6 +202,8 @@ type AgentRuntimeConstructor = { prototype: object };
 export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void {
   const proto = ctor.prototype as Record<string, unknown>;
   proto.updateConfig = updateConfig;
+  proto.getMainAgentPromptId = getMainAgentPromptId;
+  proto.setMainAgentPrompt = setMainAgentPrompt;
   proto.setExecutionState = setExecutionState;
   proto.grantPermissionFullAccess = grantPermissionFullAccess;
   proto.initializeSessionShellEnvironmentIfNeeded = initializeSessionShellEnvironmentIfNeeded;
@@ -208,8 +211,8 @@ export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void 
   proto.getMode = getMode;
   proto.getPlanEnabled = getPlanEnabled;
   proto.getSessionModelSelection = getSessionModelSelection;
-// Modified by ZCode:F5 mcp-ui 消费侧。
-proto.sampleModel = sampleModel;
+  // Modified by ZCode:F5 mcp-ui 消费侧。
+  proto.sampleModel = sampleModel;
   proto.setSessionModelSelection = setSessionModelSelection;
   proto.getProjectId = getProjectId;
   proto.setWorkingDirectory = setWorkingDirectory;

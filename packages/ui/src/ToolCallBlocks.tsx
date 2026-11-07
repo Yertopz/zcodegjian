@@ -102,6 +102,8 @@ function ToolCallBlockComponent({
   cuaGroupEvents,
   renderCuaAssistantMessage,
   renderCuaReasoning,
+  groupChatActive,
+  groupChatMember,
 }: {
   toolCallNode: TaskChatToolCallTreeNode;
   depth?: number;
@@ -150,6 +152,10 @@ function ToolCallBlockComponent({
   renderCuaReasoning?: (
     event: Extract<ConversationCuaGroupEvent, { kind: "reasoning" }>,
   ) => ReactNode;
+  /** 多智能体群聊视图的会话级开关（宿主从 rowContext 透传）。 */
+  groupChatActive?: ToolCallBlockRenderContext["groupChatActive"];
+  /** 本条消息的发起成员展示信息（宿主按成员解析后注入）；缺席回落普通工具卡。 */
+  groupChatMember?: ToolCallBlockRenderContext["groupChatMember"];
 }) {
   const { toolCall, childToolCalls } = toolCallNode;
   const { intl } = useZCodeIntl();
@@ -323,6 +329,8 @@ function ToolCallBlockComponent({
       workflowRun,
       workflowDraft,
       onLoadFullToolCallFields,
+      groupChatActive,
+      groupChatMember,
     }),
     [
       isOfficeMode,
@@ -358,6 +366,8 @@ function ToolCallBlockComponent({
       workflowRun,
       workflowDraft,
       workspacePath,
+      groupChatActive,
+      groupChatMember,
     ],
   );
 

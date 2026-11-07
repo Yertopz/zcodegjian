@@ -1,5 +1,10 @@
 /* oxlint-disable eslint(max-lines) -- AppSettings schema 聚合历史迁移、默认值和 patch 校验，拆分会削弱设置迁移的单一入口。 */
 import { z } from "zod";
+import {
+  mainAgentPromptLibrarySchema,
+  createDefaultMainAgentPromptLibrary,
+  MULTI_AGENT_PROMPT_ID,
+} from "./main-agent-prompts.js";
 import type { AppSettings } from "./protocol.js";
 import { REMOTE_ASSET_INSTALL_MODES } from "./remoteAssetInstallMode.js";
 import { isKnownRemoteResourcePackageId } from "./remoteResourcePackages.js";
@@ -357,6 +362,51 @@ function migrateLegacyLocalePreference(value: unknown): unknown {
   };
 }
 
+/**
+ * 把新版本内置主提示词补进已落盘的库。
+ *
+ * `mainAgentPrompts` 的 schema default 只在字段缺失时生效；设置文件一旦物化过旧版
+ * 默认库（3 条示例），升级后新内置条目（「多智能体模式」）不会自动出现。这里按
+ * `MULTI_AGENT_PROMPT_ID` 幂等合并：缺这条才补，用户删除/改名/自建不受影响；
+ * 用户已自定义同 id 条目时以用户库为准，不覆盖。
+ */
+function migrateBuiltinMainAgentPrompts(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const raw = value as Record<string, unknown>;
+  const library = raw.mainAgentPrompts;
+  if (!library || typeof library !== "object" || Array.isArray(library)) {
+    return value;
+  }
+  const prompts = (library as Record<string, unknown>).prompts;
+  if (!Array.isArray(prompts)) {
+    return value;
+  }
+  const hasMultiAgent = prompts.some(
+    (item) =>
+      typeof item === "object" &&
+      item !== null &&
+      (item as Record<string, unknown>).id === MULTI_AGENT_PROMPT_ID,
+  );
+  if (hasMultiAgent) {
+    return value;
+  }
+  const builtin = createDefaultMainAgentPromptLibrary().prompts.find(
+    (item) => item.id === MULTI_AGENT_PROMPT_ID,
+  );
+  if (!builtin) {
+    return value;
+  }
+  return {
+    ...raw,
+    mainAgentPrompts: {
+      ...library,
+      prompts: [...prompts, builtin],
+    },
+  };
+}
+
 const legacyRemoteWorkspaceHistoryEntrySchema = z.object({
   id: nonEmptyStringSchema,
   workspacePath: nonEmptyStringSchema,
@@ -528,6 +578,7 @@ function migrateLegacyWorkspaceSession(value: unknown): unknown {
 }
 
 const appSettingsObjectSchema = z.object({
+  mainAgentPrompts: mainAgentPromptLibrarySchema.default(createDefaultMainAgentPromptLibrary),
   recentProjects: z.array(z.string()).default([]),
   locale: localeSchema.default("zh-CN"),
   // 快捷键用户覆盖（语义校验在 ui/src/shortcuts 生效表阶段容错，schema 只管形状）
@@ -608,7 +659,7 @@ export const appSettingsSchema = z.preprocess(
         migrateMessageStreamShowReasoningDefault(
           migrateCloseToTrayOnWindowsDefault(
             migrateLegacyLocalePreference(
-              sanitizeZCodeEndpointOrigin(migrateLegacyWorkspaceSession(value)),
+              migrateBuiltinMainAgentPrompts(sanitizeZCodeEndpointOrigin(migrateLegacyWorkspaceSession(value))),
             ),
           ),
         ),
@@ -618,6 +669,7 @@ export const appSettingsSchema = z.preprocess(
 );
 
 export const appSettingsPatchSchema = z.object({
+  mainAgentPrompts: mainAgentPromptLibrarySchema.optional(),
   recentProjects: z.array(z.string()).optional(),
   locale: localeSchema.optional(),
   shortcutBindings: z.record(z.string(), z.array(z.string())).optional(),

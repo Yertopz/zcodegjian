@@ -23,6 +23,9 @@ export * from "./target.js";
 export * from "./plan-mode.js";
 export * from "./ask-user-question.js";
 export * from "./send-message.js";
+// 团队创建入口：名字常量与 schema 被 core 的工具注册、权限 owner 规则与测试读走，
+// 漏掉这行 `CreateAgent` 会静默缺席（与 SendMessage 同族）。
+export * from "./create-agent.js";
 export * from "./respond-to-coordinator.js";
 export * from "./task-output.js";
 export * from "./task-stop.js";

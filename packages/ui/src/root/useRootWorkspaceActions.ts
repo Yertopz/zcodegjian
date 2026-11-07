@@ -18,6 +18,10 @@ import { logger } from "@/logger.js";
 import { openFolderFromWorkspaceEntry } from "@/root/openWorkspaceFolderEntry.js";
 import { useConversationWorkspaceActions } from "@/root/useConversationWorkspaceActions.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
+import {
+  resetComposerPromptScope,
+  resolveComposerPromptScopeKey,
+} from "@/store/composerPromptModeStore.js";
 import { isWorkspaceReadOnly, type TabStore, type TabStoreState } from "@/store/tabStore.js";
 import type { RootProps } from "@/root/types.js";
 import {
@@ -153,6 +157,11 @@ export function useRootWorkspaceActions({
         usePaneLayoutStore.getState().resetToPrimaryPane();
       }
       useZCodeSessionStore.getState().startDraft(workspacePath, undefined, workspaceIdentity);
+      // 新建任务即「提示词尚未选」：清掉该工作区草稿 scope 的旧快照，
+      // 否则新输入框会被上一个任务的提示词判成多智能体模式。
+      resetComposerPromptScope(
+        resolveComposerPromptScopeKey(workspacePath, workspaceIdentity, null),
+      );
     },
     [workbenchGroupClientMode],
   );
@@ -255,6 +264,15 @@ export function useRootWorkspaceActions({
             createSource: typeof request === "string" ? undefined : request?.createSource,
           },
         );
+      // 与 startDraftInWorkspace 同一语义：新建任务的提示词模式先归 pending，
+      // 等新 composer 里的选择器投影出实际选中项（含「默认提示词」）。
+      resetComposerPromptScope(
+        resolveComposerPromptScopeKey(
+          newTaskTarget.workspacePath,
+          newTaskTarget.workspaceIdentity ?? undefined,
+          null,
+        ),
+      );
       if (initialPrompt) {
         // insert request 被首个 composer 消费后会清空；如果随后因 pane/config
         // 切换 remount，新 composer 会从空的 __draft__ 恢复并覆盖预填。先写草稿事实源，

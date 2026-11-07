@@ -40,7 +40,8 @@ for (const file of collectFiles(uiSrc)) {
   const size = count(source, RAW_FONT_SIZE_PATTERN);
   const color = count(source, RAW_COLOR_PATTERN);
   if (size + color === 0) continue;
-  files[relative(root, file)] = { size, color };
+  // 基线路径固定使用正斜线，避免在 Windows 重建后破坏跨平台比较。
+  files[relative(root, file).replaceAll("\\", "/")] = { size, color };
   total += size + color;
 }
 

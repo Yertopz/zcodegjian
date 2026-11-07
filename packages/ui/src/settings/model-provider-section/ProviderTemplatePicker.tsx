@@ -1,7 +1,8 @@
 import type { ProviderSettingsView } from "@zcode/services";
-import { ArrowLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronRightIcon, KeyRoundIcon, PlusIcon } from "lucide-react";
 import { resolveProviderTemplateName } from "@zcode/provider";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import {
   TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON,
   TID_MODEL_PROVIDER_TEMPLATE_ITEM,
@@ -13,42 +14,52 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { ProviderLogo } from "./ProviderLogo.js";
+import { CodexLoginForm } from "./CodexLoginForm.js";
+import type { CodexLoginFormInput } from "./CodexLoginForm.js";
 import { useProviderDetailFeedback } from "./ProviderDetailFeedback.js";
 
 type ProviderTemplateCreate = (templateId: string) => Promise<void>;
 type CustomProviderCreate = (label: string) => Promise<void>;
+type CodexLogin = (input: CodexLoginFormInput) => Promise<void>;
 
 export function ProviderTemplatePicker({
   templates,
   onBack,
   onCreateFromTemplate,
   onCreateCustom,
+  onCodexLogin,
   creating,
 }: {
   templates: ProviderSettingsView["providerTemplates"];
   onBack: () => void;
   onCreateFromTemplate: ProviderTemplateCreate;
   onCreateCustom: CustomProviderCreate;
+  /** 读取本机 Codex 凭据并写入个人 Provider；代理随该连接一起落盘。 */
+  onCodexLogin: CodexLogin;
   creating: boolean;
 }) {
   const { intl, locale } = useZCodeIntl();
   const { dismissFeedback, showFeedback } = useProviderDetailFeedback();
+  const [codexLoginOpen, setCodexLoginOpen] = useState(false);
+  const [codexLoginSubmitting, setCodexLoginSubmitting] = useState(false);
   const customLabel = intl.formatMessage({ id: "settings.modelProvider.newProviderName" });
-  const zhipuIds = ["bigmodel-api", "zai-api", "bigmodel-standard-api", "zai-standard-api"];
-  const groups = [
-    {
-      id: "zhipu",
-      templates: zhipuIds.flatMap((id) =>
-        templates.filter((template) => template.templateId === id),
-      ),
-    },
-    {
-      id: "other",
-      templates: templates.filter((template) => !zhipuIds.includes(template.templateId)),
-    },
-  ] as const;
-  const createWithFeedback = async (create: () => Promise<void>) => {
-    const feedbackKey = "provider-template-create";
+  // 智谱系模板（BigModel / Z.ai API 行）不再出现在模板网格里：这些连接在供应商列表的
+  // 订阅入口维护，重复摆一份只会让「添加供应商」多出同义选项。内置发行包随时会刷新
+  // templateRules，所以过滤写在消费侧，不依赖远端目录不再下发这几个 id。
+  const hiddenTemplateIds = [
+    "bigmodel-api",
+    "zai-api",
+    "bigmodel-standard-api",
+    "zai-standard-api",
+  ];
+  const visibleTemplates = templates.filter(
+    (template) => !hiddenTemplateIds.includes(template.templateId),
+  );
+  const createWithFeedback = async (
+    create: () => Promise<void>,
+    feedbackKey = "provider-template-create",
+    failureMessageId = "settings.modelProvider.templateCreateFailed",
+  ) => {
     dismissFeedback(feedbackKey);
     try {
       await create();
@@ -57,15 +68,32 @@ export function ProviderTemplatePicker({
       // 失败继续留在当前页，并复用详情栏底部反馈横幅提供同一次创建的重试入口。
       // 完整 Schema issues 只进入统一 UI 日志；横幅保持可读摘要，避免原始数组撑满详情区。
       logger.error("[ProviderTemplatePicker] 创建供应商失败", error);
-      const retry = () => void createWithFeedback(create);
+      const retry = () => void createWithFeedback(create, feedbackKey, failureMessageId);
+      // 横幅过去只显示固定的 i18n 文案，把真实原因（凭据格式、代理端口、配置 schema）
+      // 全丢掉，用户只能靠猜。错误自带 message 时改用 `<id>.reason` 把原因带上。
+      const reason = error instanceof Error ? error.message.trim() : "";
       showFeedback({
         key: feedbackKey,
         state: "failure",
-        message: intl.formatMessage({ id: "settings.modelProvider.templateCreateFailed" }),
+        message: reason
+          ? intl.formatMessage({ id: `${failureMessageId}.reason` }, { error: reason })
+          : intl.formatMessage({ id: failureMessageId }),
         actionLabel: intl.formatMessage({ id: "settings.modelProvider.templateCreateRetry" }),
         onAction: retry,
         dismissible: true,
       });
+    }
+  };
+  const submitCodexLogin = async (input: CodexLoginFormInput) => {
+    setCodexLoginSubmitting(true);
+    try {
+      await createWithFeedback(
+        () => onCodexLogin(input),
+        "provider-codex-login",
+        "settings.modelProvider.codexLoginFailed",
+      );
+    } finally {
+      setCodexLoginSubmitting(false);
     }
   };
   return (
@@ -77,58 +105,72 @@ export function ProviderTemplatePicker({
           size="icon-sm"
           data-testid={TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON}
           aria-label={intl.formatMessage({ id: "settings.modelProvider.templatePickerBack" })}
-          onClick={onBack}
+          onClick={codexLoginOpen ? () => setCodexLoginOpen(false) : onBack}
         >
           <ArrowLeftIcon className="size-4" aria-hidden="true" />
         </Button>
         <h2 className="text-ui-lg font-semibold text-foreground">
-          {intl.formatMessage({ id: "settings.modelProvider.templatePickerTitle" })}
+          {intl.formatMessage({
+            id: codexLoginOpen
+              ? "settings.modelProvider.codexLoginTitle"
+              : "settings.modelProvider.templatePickerTitle",
+          })}
         </h2>
       </div>
 
-      <div className="space-y-6">
-        {groups.map((group) => (
-          <section key={group.id} data-provider-template-group={group.id} className="space-y-3">
-            <h3 className="text-ui-base font-medium text-foreground-subtle">
-              {intl.formatMessage({ id: `settings.modelProvider.templateGroup.${group.id}` })}
-            </h3>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {group.id === "other" ? (
-                <ProviderTemplateCard
-                  label={intl.formatMessage({ id: "settings.modelProvider.createCustomProvider" })}
-                  disabled={creating}
-                  testId={testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "custom")}
-                  icon={
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover">
-                      <PlusIcon className="size-4" aria-hidden="true" />
-                    </span>
-                  }
-                  onClick={() => void createWithFeedback(() => onCreateCustom(customLabel))}
-                />
-              ) : null}
-              {group.templates.map((template) => {
-                const label = resolveProviderTemplateName(template.templateId, template, locale);
-                return (
-                  <ProviderTemplateCard
-                    key={template.templateId}
-                    label={label}
-                    disabled={creating}
-                    testId={testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, template.templateId)}
-                    icon={
-                      <span className="flex size-9 shrink-0 items-center justify-center">
-                        <ProviderLogo logo={template.config.logo} className="size-8" />
-                      </span>
-                    }
-                    onClick={() =>
-                      void createWithFeedback(() => onCreateFromTemplate(template.templateId))
-                    }
-                  />
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+      {codexLoginOpen ? (
+        <CodexLoginForm
+          submitting={codexLoginSubmitting}
+          onSubmit={submitCodexLogin}
+          onCancel={() => setCodexLoginOpen(false)}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <ProviderTemplateCard
+            label={intl.formatMessage({ id: "settings.modelProvider.codexLogin" })}
+            disabled={creating || codexLoginSubmitting}
+            testId={testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "codex-login")}
+            icon={
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover">
+                <KeyRoundIcon className="size-4" aria-hidden="true" />
+              </span>
+            }
+            onClick={() => setCodexLoginOpen(true)}
+          />
+          <ProviderTemplateCard
+            label={intl.formatMessage({
+              id: "settings.modelProvider.createCustomProvider",
+            })}
+            disabled={creating}
+            testId={testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "custom")}
+            icon={
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover">
+                <PlusIcon className="size-4" aria-hidden="true" />
+              </span>
+            }
+            onClick={() => void createWithFeedback(() => onCreateCustom(customLabel))}
+          />
+          {visibleTemplates.map((template) => {
+            const label = resolveProviderTemplateName(template.templateId, template, locale);
+            return (
+              <ProviderTemplateCard
+                key={template.templateId}
+                label={label}
+                disabled={creating}
+                testId={testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, template.templateId)}
+                icon={
+                  <span className="flex size-9 shrink-0 items-center justify-center">
+                    <ProviderLogo logo={template.config.logo} className="size-8" />
+                  </span>
+                }
+                onClick={() =>
+                  void createWithFeedback(() => onCreateFromTemplate(template.templateId))
+                }
+              />
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

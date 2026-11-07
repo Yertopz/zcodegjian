@@ -21,6 +21,8 @@ import type {
   loginZCodeCli,
   loginBigmodelCodingPlan,
   LoginBigmodelCodingPlanOptions,
+  LoginCodexCliOptions,
+  loginCodexCli,
   LoginZCodeCliOptions,
   listZCodeCustomCommands,
   ListZCodeCustomCommandsOptions,
@@ -73,6 +75,7 @@ export interface RunDependencies extends PluginsCommandOverrides {
     options: InspectZCodeCustomCommandOptions,
   ) => ReturnType<typeof inspectZCodeCustomCommand>;
   loginZCodeCli?: (options?: LoginZCodeCliOptions) => ReturnType<typeof loginZCodeCli>;
+  loginCodexCli?: (options: LoginCodexCliOptions) => ReturnType<typeof loginCodexCli>;
   loginBigmodelCodingPlan?: (
     options?: LoginBigmodelCodingPlanOptions,
   ) => ReturnType<typeof loginBigmodelCodingPlan>;

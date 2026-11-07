@@ -76,4 +76,12 @@ export interface BuildConversationTurnRenderUnitsOptions {
   sessionPhase?: SessionPhase;
   /** 插件卡片折叠裁决（时间线由推导结果 + 手动状态组装）。 */
   pluginUiPinResolver?: PluginUiRowPinResolver;
+  /**
+   * 必须脱离「已工作 N 秒」折叠、按 row 顺序常显的工作行。
+   *
+   * 群聊模式下成员回复（subagent 行 → 成员回复卡）是对话内容而不是过程记录；
+   * 它排在最终正文之前，按历史规则会被分进 assistantHistory 并被 CollapsibleContent
+   * 收起，用户只看到主智能体的转述。这里让这些行不进历史集合，落回常显 work 流。
+   */
+  visibleWorkRowIds?: ReadonlySet<number>;
 }

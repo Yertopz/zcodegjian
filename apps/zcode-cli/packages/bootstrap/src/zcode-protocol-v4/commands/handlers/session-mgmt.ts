@@ -56,6 +56,17 @@ async function createSession(
     offPeakToolEnabled: payload.offPeakToolEnabled,
     dynamicWorkflowEnabled: payload.dynamicWorkflowEnabled,
   });
+  if (payload.config?.mainAgentPromptId !== undefined) {
+    const promptRecord = requireRecord(host, sessionId);
+    const library = await host.readMainAgentPromptLibrary?.(sessionId);
+    const id = library?.prompts.some((item) => item.id === payload.config!.mainAgentPromptId)
+      ? payload.config.mainAgentPromptId
+      : null;
+    await promptRecord.app.runtime.setMainAgentPrompt({
+      id,
+      traceContext: promptRecord.traceContext,
+    });
+  }
   // createSession.config 消费——草稿态 UI 的先行选择（模型/思考深度/
   // 模式）在首发之前应用并补发事件，首条 turn 即用所选配置。必须在 firstInput 之前。
   // 应用失败不连坐会话创建（record 已建成，failed ACK 只会泄漏会话）：降级 warn，
@@ -91,6 +102,7 @@ async function createSession(
       );
       const intent = inputIntentMetadata(envelope, {
         text: payload.firstInput.text,
+        mainAgentPrompt: durableAdmission?.mainAgentPrompt ?? null,
         requestedDelivery: "startNow",
         attachmentRefs: payload.firstInput.attachments,
         ...resolveSubmittedExecutionState(record, payload.firstInput),

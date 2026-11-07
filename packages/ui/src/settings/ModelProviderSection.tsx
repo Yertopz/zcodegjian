@@ -258,6 +258,7 @@ export function ModelProviderSection({
     refresh,
     saveProvider,
     createPersonalProvider,
+    loginCodex,
     addPersonalModel,
     savePersonalModelDraft,
     setPersonalModelEnabled,
@@ -999,6 +1000,17 @@ export function ModelProviderSection({
     [createPersonalProvider, locale],
   );
 
+  const handleCodexLogin = useCallback(
+    async (input: Parameters<typeof loginCodex>[0]) => {
+      const outcome = await loginCodex(input);
+      // 复用新建 Provider 的选中机制：等 Provider 列表事实出现后再切到 Codex 详情，
+      // 否则导航校正会把暂时不存在的 custom key 回退掉。
+      setPendingCreatedProviderId(outcome.providerId);
+      setTemplatePickerOpen(false);
+    },
+    [loginCodex],
+  );
+
   const handleReorderProviderIds = useCallback(
     async (orderedGroupProviderIds: string[]) => {
       const groupProviderIdSet = new Set(orderedGroupProviderIds);
@@ -1090,6 +1102,7 @@ export function ModelProviderSection({
           onCreateCustom={(label) => {
             return handleCreateProvider({ providerName: label });
           }}
+          onCodexLogin={handleCodexLogin}
         />
       ) : (
         <ModelProviderSectionDetail

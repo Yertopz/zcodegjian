@@ -66,6 +66,7 @@ import {
   isPluginScopeWorkspaceConnected,
 } from "@/settings/PluginScopeMenu.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
+import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import {
   PluginInstallEmptyState,
@@ -102,6 +103,8 @@ interface AgentGroups {
   builtIn: AgentSummary[];
   plugin: AgentSummary[];
   user: AgentSummary[];
+  /** 多智能体团队成员（kind === "team"，CreateAgent 创建）：与用户子智能体分开展示。 */
+  team: AgentSummary[];
 }
 
 function projectSettingsSubagents(result: AgentsListResult): AgentSummary[] {
@@ -373,9 +376,12 @@ function AgentBadge({ children, className }: { children: string; className?: str
 }
 
 function groupAgentsByScope(agents: readonly AgentSummary[]): AgentGroups {
-  const groups: AgentGroups = { builtIn: [], plugin: [], user: [] };
+  const groups: AgentGroups = { builtIn: [], plugin: [], user: [], team: [] };
   for (const agent of agents) {
-    if (isEditableUserAgent(agent)) {
+    // CreateAgent 产出的团队成员（kind: team）单独成组，不混进「子智能体」计数。
+    if (agent.kind === "team") {
+      groups.team.push(agent);
+    } else if (isEditableUserAgent(agent)) {
       groups.user.push(agent);
     } else if (agent.source === "plugin") {
       groups.plugin.push(agent);
@@ -442,7 +448,7 @@ function ToolCheckbox({
   );
 }
 
-function AgentListRow({
+export function AgentListRow({
   agent,
   pluginIconItem,
   isOperating,
@@ -454,6 +460,7 @@ function AgentListRow({
   onDelete,
   onEdit,
   onToggle,
+  readOnly = false,
 }: {
   agent: AgentSummary;
   pluginIconItem?: Pick<StorePluginItem, "name" | "listing">;
@@ -469,12 +476,14 @@ function AgentListRow({
   onDelete: (agent: AgentSummary) => void;
   onEdit: (agent: AgentSummary) => void;
   onToggle: (agent: AgentSummary, enabled: boolean) => void;
+  /** 团队成员在多智能体分区维护，这里只读展示，避免同一条记录出现两条写入路径。 */
+  readOnly?: boolean;
 }) {
   const { intl } = useZCodeIntl();
-  const editable = isEditableUserAgent(agent);
-  const showEnabledToggle = supportsEnabledToggle(agent);
+  const editable = !readOnly && isEditableUserAgent(agent);
+  const showEnabledToggle = !readOnly && supportsEnabledToggle(agent);
   const rowEditable = editable && !isOperating;
-  const hasModelOverrideControl = supportsModelOverride(agent);
+  const hasModelOverrideControl = !readOnly && supportsModelOverride(agent);
   // 有覆盖控件的行由控件本身表达模型，不再重复显示模型徽标。
   const showModelBadge = !hasModelOverrideControl;
   const inheritModelLabel = intl.formatMessage({
@@ -498,11 +507,8 @@ function AgentListRow({
     <div
       data-testid={testId(TID_SUBAGENT_ROW, agent.name)}
       className={cn(
-        "grid cursor-default items-center gap-3 px-4 py-3 transition-colors",
+        "flex min-w-0 cursor-default flex-col items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors",
         rowEditable && "hover:bg-hover",
-        hasModelOverrideControl
-          ? "grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
-          : "grid-cols-[auto_minmax(0,1fr)_auto]",
       )}
       {...settingsResourceRowInteraction(rowEditable ? () => onEdit(agent) : undefined)}
     >
@@ -526,7 +532,7 @@ function AgentListRow({
         ) : null}
       </div>
 
-      <div className="min-w-0">
+      <div className="min-w-0 w-full">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="truncate text-ui-base font-medium text-foreground">{displayName}</span>
           {showModelBadge ? <AgentBadge>{modelLabel}</AgentBadge> : null}
@@ -537,14 +543,7 @@ function AgentListRow({
         </p>
       </div>
 
-      <div
-        className={cn(
-          "flex items-center gap-2",
-          hasModelOverrideControl
-            ? "col-span-2 min-w-0 justify-end sm:col-span-1 sm:shrink-0"
-            : "shrink-0",
-        )}
-      >
+      <div className="mt-auto flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
         {hasModelOverrideControl ? (
           <SubagentModelOverrideControl
             agent={agent}
@@ -1276,6 +1275,7 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
   // 非 Ready 生命周期均保留表单中的模型意图；error/unavailable 不能被误判成模型已失效。
   const modelSelectionLoading = modelSelectionRead.state.status !== "ready";
   const tabs = useTabStore((state) => state.tabs);
+  const openSettingsTab = useTabStore((state) => state.openSettingsTab);
   const workspaceTabs = useMemo(() => {
     const seen = new Set<string>();
     return (
@@ -1563,6 +1563,13 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
     setShowForm(false);
   }, []);
 
+  // 团队成员的唯一写入路径在多智能体分区；这里只负责把用户送过去，
+  // 不留第二套表单，避免同一条记录被两个页面交叉改写。
+  const handleOpenTeamMembers = useCallback(() => {
+    setPendingSettingsSectionIntent("multiAgent");
+    openSettingsTab();
+  }, [openSettingsTab]);
+
   const filteredAgents = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return agents.filter((agent) => {
@@ -1678,34 +1685,33 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
     );
   }
 
-  const renderAgentList = (items: AgentSummary[]) => (
-    <div className="overflow-hidden rounded-xl bg-surface">
-      {items.map((agent, index) => (
-        <div key={agent.id}>
-          {index > 0 ? <div className="h-px bg-border/50" aria-hidden="true" /> : null}
-          <AgentListRow
-            agent={agent}
-            pluginIconItem={
-              agent.pluginId
-                ? pluginIconItemById.get(agent.pluginId)
-                : agent.pluginName
-                  ? {
-                      name: agent.pluginName,
-                      listing: resolveUniquePluginListingByName(availablePlugins, agent.pluginName),
-                    }
-                  : undefined
-            }
-            isOperating={operatingAgentId === agent.id || refreshing}
-            modelGroups={chatModelSelectGroups}
-            modelSelectionView={modelSelectionView}
-            modelSelectionLoading={modelSelectionLoading}
-            modelSelectGroups={subagentModelSelectGroups}
-            onModelOverrideChange={handleModelOverrideChange}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            onToggle={handleToggle}
-          />
-        </div>
+  const renderAgentList = (items: AgentSummary[], readOnly = false) => (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {items.map((agent) => (
+        <AgentListRow
+          key={agent.id}
+          agent={agent}
+          readOnly={readOnly}
+          pluginIconItem={
+            agent.pluginId
+              ? pluginIconItemById.get(agent.pluginId)
+              : agent.pluginName
+                ? {
+                    name: agent.pluginName,
+                    listing: resolveUniquePluginListingByName(availablePlugins, agent.pluginName),
+                  }
+                : undefined
+          }
+          isOperating={operatingAgentId === agent.id || refreshing}
+          modelGroups={chatModelSelectGroups}
+          modelSelectionView={modelSelectionView}
+          modelSelectionLoading={modelSelectionLoading}
+          modelSelectGroups={subagentModelSelectGroups}
+          onModelOverrideChange={handleModelOverrideChange}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          onToggle={handleToggle}
+        />
       ))}
     </div>
   );
@@ -1823,6 +1829,22 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
               {renderAgentList(items)}
             </section>
           ))}
+          {groupedAgents.team.length > 0 ? (
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <SettingsResourceGroupHeader
+                  count={groupedAgents.team.length}
+                  title={intl.formatMessage({
+                    id: "settings.subagents.group.team",
+                  })}
+                />
+                <Button type="button" variant="link" size="sm" onClick={handleOpenTeamMembers}>
+                  {intl.formatMessage({ id: "settings.subagents.group.team.manage" })}
+                </Button>
+              </div>
+              {renderAgentList(groupedAgents.team, true)}
+            </section>
+          ) : null}
           {groupedAgents.builtIn.length > 0 ? (
             <section className="space-y-4">
               <SettingsResourceGroupHeader

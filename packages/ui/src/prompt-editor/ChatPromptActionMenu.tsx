@@ -21,6 +21,10 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { MentionPanel, type MentionPanelSection } from "@/mentions/components/MentionPanel.js";
 import { PluginMentionOptionContent } from "@/mentions/components/PluginMentionOptionContent.js";
 import { usePluginsMentionProvider } from "@/mentions/providers/pluginsMentionProvider.js";
+import { useSubagents } from "@/hooks/useSubagents.js";
+import { mapAgentsToMentionItems } from "@/mentions/providers/agentsMentionProvider.js";
+import { mapTeamMembersToMentionItems } from "@/mentions/providers/teamMembersMentionProvider.js";
+import { TeamMemberMentionOptionContent } from "@/mentions/components/TeamMemberMentionOptionContent.js";
 
 /**
  * 「添加」分区里紧随附件之后的命令快捷项，选中即插入与 `/` 面板相同的命令标签。
@@ -62,7 +66,7 @@ export function ChatPromptActionMenu({
   showPlugins: boolean;
   excludedSlashCommandNames?: readonly string[];
 }) {
-  const { intl } = useZCodeIntl();
+  const { intl, locale } = useZCodeIntl();
   const [open, setOpen] = useState(false);
   const [quickCommands, setQuickCommands] = useState<QuickCommand[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -87,6 +91,22 @@ export function ChatPromptActionMenu({
     intl.formatMessage({ id: "chat.mention.plugins.title" }),
   );
   const provider = useChatViewActiveTaskProvider(sessionId, workspacePath, workspaceIdentity);
+  const {
+    agents,
+    loading: agentsLoading,
+    error: agentsError,
+  } = useSubagents(workspacePath, provider, workspaceIdentity);
+  // 与 @ 和 / 面板共享同一目录及 canonical mention；菜单不直接启动 Agent。
+  // 团队成员与普通子智能体分组成两段：团队成员要带头像渲染，且不该混进「子智能体」计数。
+  const teamMemberItems = useMemo(
+    () =>
+      open && !disabled && showPlugins ? mapTeamMembersToMentionItems(agents, { locale }) : [],
+    [agents, disabled, open, showPlugins, locale],
+  );
+  const agentItems = useMemo(
+    () => (open && !disabled && showPlugins ? mapAgentsToMentionItems(agents, { locale }) : []),
+    [agents, disabled, open, showPlugins, locale],
+  );
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
   const files = useFileMentionProvider(
     workspacePath,
@@ -116,7 +136,12 @@ export function ChatPromptActionMenu({
       errorText: group.error?.message ?? null,
     })),
   );
-  const mentionItems = [...plugins.items, ...contextGroups.flatMap((group) => group.items)];
+  const mentionItems = [
+    ...teamMemberItems,
+    ...agentItems,
+    ...plugins.items,
+    ...contextGroups.flatMap((group) => group.items),
+  ];
   const attachmentCount = attachmentAction ? 1 : 0;
   const options = [
     ...(attachmentAction ? [{ disabled: false }] : []),
@@ -166,6 +191,35 @@ export function ChatPromptActionMenu({
         }),
       ],
     },
+    ...(open && !disabled && showPlugins && teamMemberItems.length > 0
+      ? [
+          {
+            id: "teamMembers",
+            title: intl.formatMessage({ id: "chat.mention.teamMembers.title" }),
+            emptyText: intl.formatMessage({ id: "chat.mention.teamMembers.empty" }),
+            loading: agentsLoading,
+            loadingText: intl.formatMessage({ id: "chat.mention.category.loading" }),
+            errorText: agentsError,
+            options: teamMemberItems.map((item) => ({
+              ...item,
+              content: <TeamMemberMentionOptionContent item={item} />,
+            })),
+          },
+        ]
+      : []),
+    ...(open && !disabled && showPlugins && (agentItems.length > 0 || agentsLoading || agentsError)
+      ? [
+          {
+            id: "subagents",
+            title: intl.formatMessage({ id: "chat.mention.subagents.title" }),
+            emptyText: intl.formatMessage({ id: "chat.mention.subagents.empty" }),
+            loading: agentsLoading,
+            loadingText: intl.formatMessage({ id: "chat.mention.category.loading" }),
+            errorText: agentsError,
+            options: agentItems,
+          },
+        ]
+      : []),
     {
       id: "plugins",
       title: plugins.title,

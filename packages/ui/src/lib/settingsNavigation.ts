@@ -13,7 +13,10 @@ export type SettingsSectionId =
   | "skill"
   | "plugins"
   | "usage"
+  | "mainAgentPrompts"
   | "subagents"
+  // 多智能体（agent team）：成员互相 @、@ 次数上限、创建智能体的授权成员。
+  | "multiAgent"
   | "commands"
   | "hooks"
   | "workspaceFileSearch"
@@ -84,7 +87,9 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
     value === "skill" ||
     value === "plugins" ||
     value === "usage" ||
+    value === "mainAgentPrompts" ||
     value === "subagents" ||
+    value === "multiAgent" ||
     value === "commands" ||
     value === "hooks" ||
     value === "workspaceFileSearch" ||

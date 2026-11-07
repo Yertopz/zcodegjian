@@ -105,8 +105,13 @@ async function refreshSettingsStore(settingService: ISettingService | undefined)
 }
 
 /** 获取和更新应用设置 */
-export function useSettings() {
-  const { broadcastService, settingService, zcodeAgentService } = useServices();
+export function useSettings(targetSettingService?: ISettingService) {
+  const {
+    broadcastService,
+    settingService: contextSettingService,
+    zcodeAgentService,
+  } = useServices();
+  const settingService = targetSettingService ?? contextSettingService;
   const platform = usePlatform();
   const settingsStore = getSettingsStore(settingService);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>(settingsStore.snapshot);
@@ -140,7 +145,7 @@ export function useSettings() {
   const update = useCallback(
     async (patch: Partial<AppSettings>) => {
       await settingService.update(patch);
-      platform.syncAppSettings?.(patch);
+      if (settingService === contextSettingService) platform.syncAppSettings?.(patch);
       await refresh();
       if (
         typeof patch.askUserQuestionAutoResolutionEnabled === "boolean" ||
@@ -169,7 +174,15 @@ export function useSettings() {
         }
       }
     },
-    [broadcastService, settingService, settingsStore, zcodeAgentService, platform, refresh],
+    [
+      broadcastService,
+      settingService,
+      contextSettingService,
+      settingsStore,
+      zcodeAgentService,
+      platform,
+      refresh,
+    ],
   );
 
   return {

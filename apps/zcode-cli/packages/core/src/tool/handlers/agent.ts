@@ -105,6 +105,8 @@ function buildAgentProviderDescription(
     agentList,
     "",
     "When using the Agent tool, specify a subagent_type parameter to select which agent type to use. If omitted, the general-purpose agent is used.",
+    // UI 的 @ 名称是普通用户文本，不是具有权限的执行指令；由模型结合任务意图解释。
+    "In a user message, @name can refer to an available agent type listed above. If the user asks that agent to do work, select its matching subagent_type. A mention does not by itself request delegation or override permission rules.",
     "",
     "## When to use",
     "",

@@ -18,7 +18,7 @@ import {
   type ModelProviderId,
   type ModelRequestAuth,
 } from "@zcode/contracts";
-import type { RegistryProviderConfig } from "@zcode/provider";
+import { buildProviderNetworkProxyUrl, type RegistryProviderConfig } from "@zcode/provider";
 import { withOpenRouterAttributionHeaders } from "@zcode/shared";
 import { createAnthropicCompatFetch } from "./anthropic-stream-compat.js";
 import { createOpenAIResponsesJsonCompatFetch } from "./openai-responses-json-compat.js";
@@ -40,6 +40,8 @@ interface AiSdkProviderConfig {
   headers?: Record<string, string>;
   providerOptions?: Record<string, unknown>;
   name?: string;
+  /** Provider 独占出口代理 URL；存在时覆盖全局 network.httpProxy 且不参与 noProxy 判定。 */
+  networkProxyUrl?: string;
 }
 
 export interface AiSdkModelExecutionConfig {
@@ -262,7 +264,7 @@ export class AiSdkModelExecution {
   ): LanguageModelFactory {
     const apiKey = this.resolveApiKey(providerConfig);
     const headers = providerConfig.headers;
-    const providerTransport = this.resolveProviderTransport(providerId);
+    const providerTransport = this.resolveProviderTransport(providerId, providerConfig);
     const fetch = createProviderBusinessErrorFetch({
       fetch: providerTransport,
       providerId,
@@ -321,21 +323,30 @@ export class AiSdkModelExecution {
     return providerConfig.apiKey;
   }
 
-  private resolveProviderTransport(providerId: string): ProviderFetch {
-    const current = this.providerTransports.get(providerId);
+  private resolveProviderTransport(
+    providerId: string,
+    providerConfig: AiSdkProviderConfig,
+  ): ProviderFetch {
+    const providerProxyUrl = providerConfig.networkProxyUrl;
+    // Provider 独占代理必须参与缓存键：同一 Provider 换了代理要立刻换出口，
+    // 否则旧代理会把请求继续发到错误出口。
+    const cacheKey = providerProxyUrl ? `${providerId}\u0000${providerProxyUrl}` : providerId;
+    const current = this.providerTransports.get(cacheKey);
     if (current) {
       return current;
     }
     // 官方 Coding Plan 端点先替换为平台网关端点，再进入用户 HTTP 代理 fetch，
-    // httpProxy / noProxy 按实际发送地址判定。
+    // httpProxy / noProxy 按实际发送地址判定；
+    // Provider 自带代理时改为独占出口，不再参与 noProxy 与环境代理判定。
     const transport = createProviderTransportFetch({
       caCertFile: this.network.caCertFile,
       env: this.env,
       fetch: this.baseTransport,
-      httpProxy: this.network.httpProxy,
-      noProxy: this.network.noProxy,
+      ...(providerProxyUrl
+        ? { directProxyUrl: providerProxyUrl }
+        : { httpProxy: this.network.httpProxy, noProxy: this.network.noProxy }),
     });
-    this.providerTransports.set(providerId, transport);
+    this.providerTransports.set(cacheKey, transport);
     return transport;
   }
 }
@@ -351,12 +362,14 @@ function toAiSdkProviderConfig(
   providerId: string,
   config: RegistryProviderConfig,
 ): AiSdkProviderConfig {
+  const networkProxyUrl = buildProviderNetworkProxyUrl(config.network);
   const common = {
     ...(config.access.type !== "zhipu-account" && config.access.apiKey
       ? { apiKey: config.access.apiKey }
       : {}),
     baseURL: config.api.baseUrl,
     ...(config.api.headers ? { headers: { ...config.api.headers } } : {}),
+    ...(networkProxyUrl ? { networkProxyUrl } : {}),
     providerOptions: { apiFormat: config.api.type },
     access: config.access,
   };
@@ -500,6 +513,8 @@ interface ProviderProxyFetchOptions {
   fetch?: ProviderFetch;
   httpProxy?: string;
   noProxy?: string;
+  /** Provider 独占出口代理 URL（socks5/socks5h/http/https），优先级高于 httpProxy 且忽略 noProxy。 */
+  directProxyUrl?: string;
 }
 
 function createProviderProxyFetch(options: ProviderProxyFetchOptions): ProviderFetch {

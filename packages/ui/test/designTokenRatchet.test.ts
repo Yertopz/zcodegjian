@@ -63,7 +63,8 @@ test("不得新增 raw 字号 / raw 颜色（超出基线即红）", () => {
     const source = readFileSync(file, "utf8");
     const size = count(source, RAW_FONT_SIZE_PATTERN);
     const color = count(source, RAW_COLOR_PATTERN);
-    const key = relative(repoRoot, file);
+    // 基线由 Linux CI 生成；Windows 路径须统一成正斜线才能命中同一条规则。
+    const key = relative(repoRoot, file).replaceAll("\\", "/");
     const allowed = baseline.files[key] ?? { size: 0, color: 0 };
     if (size > allowed.size || color > allowed.color) {
       violations.push(`${key}: size ${allowed.size}→${size} / color ${allowed.color}→${color}`);

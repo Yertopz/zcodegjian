@@ -288,6 +288,22 @@ export const TID_CHAT_ASSISTANT_HISTORY_CONTENT = "chat-assistant-history-conten
 export const TID_CHAT_BACKGROUND_RESULT_TITLE = "chat-background-result-title";
 /** 聊天工具调用块容器（动态后缀为 toolCallId） */
 export const TID_CHAT_TOOL_CALL_BLOCK = "chat-tool-call-block";
+/** 多智能体群聊视图的成员消息气泡（SendMessage 群聊样式；动态后缀为 toolCallId） */
+export const TID_CHAT_GROUP_CHAT_MESSAGE = "chat-group-chat-message";
+/** 多智能体群聊视图的成员身份行（头像 + 名字 + 简介；消息卡与成员面板共用） */
+export const TID_CHAT_GROUP_CHAT_IDENTITY = "chat-group-chat-identity";
+/** 群聊消息卡里引用的触发消息（`你：…`；动态后缀为卡片 testid） */
+export const TID_CHAT_GROUP_CHAT_MESSAGE_QUOTE = "chat-group-chat-message-quote";
+/** 群聊消息卡的状态页脚（正在干活… / 看过程；动态后缀为卡片 testid） */
+export const TID_CHAT_GROUP_CHAT_MESSAGE_STATUS = "chat-group-chat-message-status";
+/** 成员没能回复的紧凑行（动态后缀为 toolCallId） */
+export const TID_CHAT_GROUP_CHAT_REPLY_FAILED = "chat-group-chat-reply-failed";
+/** 多智能体群聊视图左侧的会话成员面板 */
+export const TID_CHAT_GROUP_CHAT_MEMBER_RAIL = "chat-group-chat-member-rail";
+/** 会话成员面板的成员行（携带 data-member-name） */
+export const TID_CHAT_GROUP_CHAT_MEMBER_RAIL_ITEM = "chat-group-chat-member-rail-item";
+/** 会话成员面板的收起/展开开关 */
+export const TID_CHAT_GROUP_CHAT_MEMBER_RAIL_TOGGLE = "chat-group-chat-member-rail-toggle";
 /** 聊天用户消息编辑按钮（动态后缀为 messageId） */
 export const TID_CHAT_MESSAGE_EDIT_BUTTON = "chat-message-edit-button";
 /** 聊天用户消息编辑输入框（动态后缀为 messageId） */
@@ -679,6 +695,22 @@ export const TID_V4_ROW_ATTACHMENTS = "v4-row-attachments";
 // Plugin 商店
 /** Plugin 设置页里进入插件商店的入口按钮（商店是 WorkspaceShell 主视图，不是设置页分区） */
 export const TID_PLUGIN_STORE_BROWSE = "plugin-store-browse";
+
+// 浏览器控制台（多实例 / 独立代理 / 网络与页面面板）
+/** 侧边栏「浏览器」入口 */
+export const TID_BROWSER_CONSOLE_OPEN = "browser-console-open";
+/** 控制台主视图根节点 */
+export const TID_BROWSER_CONSOLE_ROOT = "browser-console";
+/** 实例条新建按钮 */
+export const TID_BROWSER_CONSOLE_CREATE_INSTANCE = "browser-console-create-instance";
+/** 标签条新建按钮 */
+export const TID_BROWSER_CONSOLE_NEW_TAB = "browser-console-new-tab";
+/** 检查器开关 */
+export const TID_BROWSER_CONSOLE_INSPECTOR_TOGGLE = "browser-console-inspector-toggle";
+/** 「AI 控制此浏览器」开关 */
+export const TID_BROWSER_CONSOLE_AI_CONTROL = "browser-console-ai-control";
+/** 网络列表行 */
+export const TID_BROWSER_CONSOLE_NETWORK_ROW = "browser-console-network-row";
 
 // Automations / 定时任务
 export const TID_AUTOMATIONS_OPEN = "automations-open";

@@ -11,6 +11,7 @@ import {
   type zhipuAccountModeDataSchema,
   type providerVisibilityDataSchema,
   type providerLogoDataSchema,
+  type providerNetworkProxyDataSchema,
   type apiKeyAccessDataSchema,
   type zhipuAccountAccessDataSchema,
   type providerAccessDataSchema,
@@ -126,6 +127,28 @@ export type ProviderVisibility = z.infer<typeof providerVisibilityDataSchema>;
 
 export type ProviderLogoRef = Readonly<z.infer<typeof providerLogoDataSchema>>;
 
+export type ProviderNetworkProxyRef = Readonly<z.infer<typeof providerNetworkProxyDataSchema>>;
+
+/**
+ * Provider 级代理的完整 URL。执行侧只消费这一个函数，
+ * 凭据在这里就地编码，避免各调用点各写一份拼接规则。
+ */
+export function buildProviderNetworkProxyUrl(
+  network: ProviderNetworkProxyRef | null | undefined,
+): string | null {
+  if (!network) return null;
+  const host = network.host?.trim();
+  const port = network.port;
+  if (!network.type || !host || !port) return null;
+  const username = network.username?.trim();
+  const password = network.password ?? "";
+  const credentials = username
+    ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`
+    : "";
+  const bracketedHost = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+  return `${network.type}://${credentials}${bracketedHost}:${port}`;
+}
+
 export type ProviderApiConfigInput = Readonly<z.infer<typeof providerApiDataSchema>>;
 
 export class ProviderApiConfig extends ConfigOverlay<ProviderApiConfig> {
@@ -175,6 +198,8 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
   readonly logo?: ProviderConfigObject["logo"];
   readonly access?: ProviderAccessConfig | null;
   readonly api?: ProviderApiConfig | null;
+  /** Provider 独占出口代理；为空时沿用全局网络设置。 */
+  readonly network?: ProviderConfigObject["network"];
   readonly builtinModelIds?: ProviderConfigObject["builtinModelIds"];
   readonly personalModelIds?: ProviderConfigObject["personalModelIds"];
   readonly modelOrder?: ProviderConfigObject["modelOrder"];
@@ -187,6 +212,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
     this.logo = freezeProviderLogo(input.logo);
     this.access = input.access;
     this.api = input.api;
+    this.network = freezeProviderNetworkProxy(input.network);
     this.builtinModelIds = freezeModelIds(input.builtinModelIds);
     this.personalModelIds = freezeModelIds(input.personalModelIds);
     this.modelOrder = freezeModelIds(input.modelOrder);
@@ -201,6 +227,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.overlayValue(this.logo, next.logo),
       access: overlayProviderAccess(this.access, next.access),
       api: this.overlayConfig(this.api, next.api),
+      network: this.overlayValue(this.network, next.network),
       builtinModelIds: this.overlayValue(this.builtinModelIds, next.builtinModelIds),
       personalModelIds: this.overlayValue(this.personalModelIds, next.personalModelIds),
       modelOrder: this.overlayValue(this.modelOrder, next.modelOrder),
@@ -228,6 +255,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access,
       api: this.api,
+      network: this.network,
       builtinModelIds: this.builtinModelIds,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
@@ -241,6 +269,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access,
       api: this.api,
+      network: this.network,
       builtinModelIds: this.builtinModelIds,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
@@ -256,6 +285,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access,
       api: this.api,
+      network: this.network,
       builtinModelIds: source?.builtinModelIds,
       personalModelIds: source?.personalModelIds,
       modelOrder: source?.modelOrder,
@@ -277,6 +307,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access?.toJSON() ?? this.access,
       api: this.api?.toJSON() ?? this.api,
+      network: this.network,
       builtinModelIds: this.builtinModelIds,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
@@ -383,6 +414,12 @@ function freezeProviderLogo(
   logo: ProviderLogoRef | null | undefined,
 ): ProviderLogoRef | null | undefined {
   return logo ? Object.freeze({ ...logo }) : logo;
+}
+
+function freezeProviderNetworkProxy(
+  network: ProviderNetworkProxyRef | null | undefined,
+): ProviderNetworkProxyRef | null | undefined {
+  return network ? Object.freeze({ ...network }) : network;
 }
 
 function freezeModelIds(

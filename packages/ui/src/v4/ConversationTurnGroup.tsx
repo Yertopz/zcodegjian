@@ -774,7 +774,10 @@ function ConversationWorkSegmentFlow({
     setHistoryOpen(segment.assistantHistoryDefaultOpen);
   }, [segment.assistantHistoryDefaultOpen, segment.key]);
 
-  const shouldShowHistoryStatus = segment.workStatus !== undefined;
+  // 历史集合为空时没有可展开的过程记录：群聊成员回复卡被提升为常显内容后，
+  // 该段可能只剩常显 work 行，此时保留「已工作 N 秒」折叠按钮会变成点了没反应的死按钮。
+  const shouldShowHistoryStatus =
+    segment.workStatus !== undefined && segment.assistantHistoryRows.length > 0;
   const firstAssistantFlowItemIndex = segment.flowItems.findIndex(
     (item) => item.kind !== "userInput",
   );
@@ -1266,7 +1269,7 @@ function ConversationTurnGroupImpl({
   unit,
   nowMs = Date.now(),
   apiRetry = null,
-  context,
+  context: outerContext,
   onFork,
   onRetry,
   onFeedbackChange,
@@ -1276,6 +1279,21 @@ function ConversationTurnGroupImpl({
   const isOfficeMode = useIsOfficeMode();
   const { intl } = useZCodeIntl();
   const visibleUserRows = useMemo(() => unit.visibleUserInputs, [unit.visibleUserInputs]);
+  // 群聊消息卡的引用条（`你：…`）要引用**触发这一轮的那句用户输入**，而不是成员的派单
+  // 提示词。这段文本只有本层拿得到（visibleUserInputs），所以在这里覆盖一次上下文，
+  // 本轮所有行共享同一份。只认 origin === "realUser"：后台结果、目标续跑、workflow 启动
+  // 那些 synthetic 文本不能说成「你说的」。缺席时原样返回上游 context 以保持引用稳定
+  // （ToolCallBlock / MessageResponse 的 memo 依赖 context 身份）。
+  const turnUserInputText = useMemo(() => {
+    const row = visibleUserRows.find(
+      (candidate) => candidate.origin === "realUser" && candidate.text.trim().length > 0,
+    );
+    return row?.text.trim();
+  }, [visibleUserRows]);
+  const context = useMemo<ConversationRowRenderContext>(
+    () => (turnUserInputText ? { ...outerContext, turnUserInputText } : outerContext),
+    [outerContext, turnUserInputText],
+  );
   useSyncExternalStore(subscribeHighspeedTurns, getHighspeedTurnVersion, getHighspeedTurnVersion);
   const sourceCommandId = unit.header?.sourceCommandId ?? visibleUserRows[0]?.sourceCommandId;
   const highspeedTurn = getHighspeedTurnByCommandId(sourceCommandId);

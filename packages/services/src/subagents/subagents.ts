@@ -5,7 +5,10 @@ import type {
   AgentCreateParams,
   AgentUpdateParams,
   AgentDeleteParams,
+  AgentAvatarSetParams,
   BuiltInSubagentModelOverrideParams,
+  MultiAgentRuntimeSettings,
+  MultiAgentSettingsPatch,
   PluginSubagentModelOverrideParams,
   SubagentsListMode,
 } from "@zcode/shared";
@@ -21,6 +24,9 @@ export interface ISubagentsService {
   }): Promise<AgentsListResult>;
 
   setEnabled(params: { agentId: string; enabled: boolean }): Promise<void>;
+
+  /** 设置或清除 agent 头像（只写 state，不改 Markdown；头像不进入 CLI 运行契约）。 */
+  setAgentAvatar(params: AgentAvatarSetParams): Promise<void>;
 
   setBuiltInModelOverride(params: BuiltInSubagentModelOverrideParams): Promise<void>;
 
@@ -38,6 +44,14 @@ export interface ISubagentsService {
 
   /** 删除 agent 文件 */
   deleteAgent(params: AgentDeleteParams): Promise<void>;
+
+  /** 读取「多智能体」设置；缺省字段在这里补成解析值，消费方不再各自回落。 */
+  getMultiAgentConfig(): Promise<MultiAgentRuntimeSettings>;
+
+  /** 局部更新「多智能体」设置，返回写入后的解析值。 */
+  setMultiAgentConfig(params: {
+    patch: MultiAgentSettingsPatch;
+  }): Promise<MultiAgentRuntimeSettings>;
 }
 
 export const ISubagentsService = createServiceDescriptor<ISubagentsService>(

@@ -1,6 +1,7 @@
 import type {
   ModelUsage,
   SessionId,
+  SubagentMentionBudget,
   SubagentTaskSnapshot,
   TraceContext,
   TurnId,
@@ -27,10 +28,16 @@ export interface RuntimeTaskPendingMessage {
   id: string;
   isMeta?: boolean;
   message: string;
-  origin?: {
-    kind: "coordinator";
-    toolCallId?: string;
-  };
+  origin?:
+    | { kind: "coordinator"; toolCallId?: string }
+    | {
+        kind: "peer";
+        agentId: string;
+        agentType: string;
+        toolCallId?: string;
+        /** 这次 @ 扣完后的剩余次数快照；注入提示用它告诉接收方还剩几次。 */
+        mentionBudget?: SubagentMentionBudget;
+      };
   queuedAt: Date;
   summary?: string;
   traceContext?: TraceContext;

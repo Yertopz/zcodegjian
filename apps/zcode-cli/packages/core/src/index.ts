@@ -145,6 +145,9 @@ export { AgentRuntime } from "./runtime.js";
 // 「算不算切了模型」出现两种答案，症状是复位该触发时不触发（或反之抖动 revision）。
 export { sameModelSelection } from "./runtime/methods/turn-model.js";
 export { createExternalTurnFaultError } from "./runtime/helpers/turn-errors.js";
+// 「多智能体」运行期设置的唯一推导入口：bootstrap 每建会话按 agents-state.json 推导一次，
+// 工具门（Agent / CreateAgent）与 @ 预算都从这一份设置出发。
+export { createMainRuntimeMultiAgentSettings } from "./runtime/helpers/multi-agent-config.js";
 export { repairPersistedRemoteSessionPaths } from "./runtime/helpers/persisted-remote-session-path-repair.js";
 // 「按值把一段转录复制进另一个会话」的克隆器。fork 之外的第二个消费者是 dwf 的 amend-resume
 // 转录截断（bootstrap 的 workflow-actor-transcript.ts）：同一个动作——新会话用本地 id 续写，
@@ -159,6 +162,7 @@ export type {
   ActiveTurnInfo,
   AgentRuntimeConfig,
   AgentRuntimeDeps,
+  AgentRuntimeMultiAgentSettings,
   ConversationRewindResult,
   ExecuteTurnOptions,
   ModelExecutionContext,

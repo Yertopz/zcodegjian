@@ -41,6 +41,7 @@ import { ConversationTurnNavigator } from "@/v4/ConversationTurnNavigator.js";
 import { syncConversationShareSelectionPanelLayout } from "@/v4/conversationShareSelectionPanelLayout.js";
 import type { ConversationRowRenderContext } from "@/v4/conversationRowContext.js";
 import { splitConversationTimelineLiveTail } from "@/v4/conversationTimelineLiveTail.js";
+import { resolveGroupChatMemberByName } from "@/v4/groupChatMemberJoin.js";
 import { useBotTopicPreparations } from "@/v4/BotTopicPreparation.js";
 import { withTopicPreparationMessages } from "@/v4/topicPreparationRenderUnits.js";
 import {
@@ -419,6 +420,20 @@ function ConversationTimelineImpl({
     return () => observer.disconnect();
   }, [hasHeaderSlot]);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  // 群聊成员回复（subagent 行 → 成员回复卡）是对话内容，不是过程记录。它排在最终正文
+  // 之前，按历史规则会被并进「已工作 N 秒」折叠里，用户只能看到主智能体的转述；
+  // 这里把可解析成团队成员的行点名交给分段器，让它们在 work 流里常显。
+  const groupChatActive = rowContext.groupChatActive === true;
+  const groupChatMembers = rowContext.groupChatMembers;
+  const visibleWorkRowIds = useMemo(() => {
+    if (!groupChatActive || !groupChatMembers || groupChatMembers.size === 0) return undefined;
+    const ids = new Set<number>();
+    for (const row of rows) {
+      if (row.kind !== "subagent") continue;
+      if (resolveGroupChatMemberByName(row.subagentType, groupChatMembers)) ids.add(row.rowId);
+    }
+    return ids.size > 0 ? ids : undefined;
+  }, [groupChatActive, groupChatMembers, rows]);
   // 群话题准备态：未接受的群材料投影进最后一条轮次，不伪造 CLI row（不产生任务/轮次/可编辑假消息）。
   const topicPreparations = useBotTopicPreparations();
   const renderUnits = useMemo(
@@ -427,11 +442,12 @@ function ConversationTimelineImpl({
         buildConversationTurnRenderUnits(rows, {
           nowMs: liveNowMs,
           sessionPhase,
+          ...(visibleWorkRowIds ? { visibleWorkRowIds } : {}),
         }),
         rows,
         topicPreparations,
       ),
-    [liveNowMs, rows, sessionPhase, topicPreparations],
+    [liveNowMs, rows, sessionPhase, topicPreparations, visibleWorkRowIds],
   );
   const { virtualizedUnits, liveUnit, liveUnitIndex } = useMemo(
     () => splitConversationTimelineLiveTail(renderUnits),

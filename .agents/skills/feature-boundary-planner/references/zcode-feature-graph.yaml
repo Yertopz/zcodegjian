@@ -142,6 +142,24 @@ nodes:
         symbol: SubagentsSection
       - file: apps/zcode-cli/packages/core/src/tool/handlers/agent.ts
         symbol: agentHandler
+  - id: capability.agent-team
+    kind: capability
+    label: Multi-agent team mode
+    aliases:
+      - agent team
+      - multi-agent
+      - 多智能体
+      - 团队模式
+      - mention limit
+    codeSeeds:
+      - file: packages/ui/src/settings/MultiAgentSection.tsx
+        symbol: MultiAgentSection
+      - file: apps/zcode-cli/packages/core/src/runtime/helpers/multi-agent-config.ts
+        symbol: resolveIncludeAgentTool
+      - file: apps/zcode-cli/packages/core/src/subagent/peer-message.ts
+        symbol: createPeerSubagentPort
+      - file: apps/zcode-cli/packages/core/src/tool/handlers/create-agent.ts
+        symbol: createCreateAgentToolEntry
   - id: state.subagent-form-draft
     kind: state-owner
     label: Subagent form draft
@@ -460,6 +478,16 @@ edges:
     type: commits-to
     rank: must-inspect
     condition: Built-in and plugin overrides use setBuiltInModelOverride and setPluginAgentModelOverride.
+  - from: capability.agent-team
+    to: service.subagents
+    type: persists-settings
+    rank: must-inspect
+    condition: The team switch, mention limit and creator live in agents-state.json.
+  - from: capability.agent-team
+    to: persistence.subagent-markdown
+    type: writes-agent
+    rank: must-inspect
+    condition: The designated creator can create user-level agent Markdown.
   - from: service.subagents
     to: persistence.subagent-markdown
     type: persists-to

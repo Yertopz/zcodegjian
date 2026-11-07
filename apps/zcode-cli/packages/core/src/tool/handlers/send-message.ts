@@ -7,6 +7,7 @@ import {
   createCoreError,
   type SendMessageInput,
   type SendMessageOutput,
+  type SubagentSendMessageResult,
   type TraceContext,
 } from "@zcode/contracts";
 import type { ToolEntry, ToolHandler } from "../types.js";
@@ -33,6 +34,13 @@ const SEND_MESSAGE_PROVIDER_DESCRIPTION = [
   "",
   "Your plain text output is NOT visible to other agents — to communicate, you MUST call this tool. Messages from agents are delivered automatically; you don't check an inbox. Refer to local agents by the `agentId` returned in the Agent spawn result. To resume a completed agent, use its `agentId`; it resumes in the background and you'll be notified when it finishes.",
 ].join("\n");
+
+const PEER_SEND_MESSAGE_PROVIDER_DESCRIPTION = [
+  "# SendMessage",
+  "Send a message to a running peer in the same parent conversation. Use the peer's agent ID or its unique agent type name (optionally prefixed with @).",
+  "The peer must already be running and ready; this tool cannot start or resume agents. Names shared by multiple running peers require an agent ID. Sending to yourself or another session is rejected.",
+  "Peer messages have a shared limit and remain subject to each agent's permission rules. You may receive replies automatically during your current turn.",
+].join("\n\n");
 
 const SEND_MESSAGE_TOOL_OUTPUT_SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -66,7 +74,7 @@ const sendMessageHandler: ToolHandler = async (input, context) => {
     );
   }
 
-  return context.subagentPort.sendMessage(
+  const result = await context.subagentPort.sendMessage(
     {
       sessionId: context.sessionId,
       turnId: context.turnId,
@@ -79,13 +87,35 @@ const sendMessageHandler: ToolHandler = async (input, context) => {
       trace: resolveToolTraceContext(context),
     },
     { signal: context.abortSignal },
-  ) satisfies Promise<SendMessageOutput>;
+  );
+  return toSendMessageOutput(result);
 };
+
+/**
+ * 把「剩余 @ 次数」从端口结果抬到工具输出：`mentionBudget` 是内部口径，
+ * 模型看到的是 `mentionsRemaining` / `mentionLimit`，并附一句可直接读的提示，
+ * 否则模型只能靠猜还剩几次（这也是团队模式最容易打空额度的原因）。
+ */
+function toSendMessageOutput(result: SubagentSendMessageResult): SendMessageOutput {
+  const budget = result.mentionBudget;
+  const { mentionBudget: _ignored, ...rest } = result;
+  if (!budget) return rest satisfies SendMessageOutput;
+  const budgetNote = `Peer mentions remaining: ${budget.remaining} of ${budget.limit}.`;
+  return {
+    ...rest,
+    mentionsRemaining: budget.remaining,
+    mentionLimit: budget.limit,
+    message: rest.message ? `${rest.message} ${budgetNote}` : budgetNote,
+  } satisfies SendMessageOutput;
+}
 
 export const sendMessageToolEntry: ToolEntry = {
   capability: "Send a short message to a local agent",
   metadata: {
-    shouldDefer: true,
+    // Bug 根因：SendMessage 曾声明 shouldDefer，团队会话里模型只看到目录名而拿不到 schema，
+    // 于是反复输出「我现在向 X 发送…」这类计划文字却不真正调用，成员从未启动。
+    // 分派成员是多智能体的核心动作，与「偶尔用一次的冷工具」不同，必须让它常驻可见。
+    alwaysLoad: true,
     searchHint: "send messages to agent teammates",
     name: SEND_MESSAGE_TOOL_NAME,
     description: SEND_MESSAGE_PROVIDER_DESCRIPTION,
@@ -140,6 +170,14 @@ export const sendMessageToolEntry: ToolEntry = {
     recordOutput: "summary",
   },
 };
+
+export function createSendMessageToolEntry(options: { peerOnly?: boolean } = {}): ToolEntry {
+  if (!options.peerOnly) return sendMessageToolEntry;
+  return {
+    ...sendMessageToolEntry,
+    metadata: { ...sendMessageToolEntry.metadata, description: PEER_SEND_MESSAGE_PROVIDER_DESCRIPTION },
+  };
+}
 
 function formatSendMessageModelContent(output: unknown): string {
   const result = SendMessageOutputSchema.parse(output);

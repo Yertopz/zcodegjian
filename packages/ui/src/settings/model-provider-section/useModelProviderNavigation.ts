@@ -223,7 +223,9 @@ export function useModelProviderNavigation({
       },
     ];
 
-    return groups;
+    // 分组标题只在有可见条目时出现：预设分组被清空后不保留空标题（例如移除
+    // BigModel 预设行后，"智谱" 分组不再只剩一个空壳）。
+    return groups.filter((group) => group.items.length > 0);
   }, [
     customProviders,
     codingPlanItems,

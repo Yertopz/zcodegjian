@@ -25,6 +25,7 @@ import {
   type ProviderSettingsConnectivityTester,
 } from "./providerFacadeServices.js";
 import type { ProviderModelCatalogFetcher } from "./providerModelCatalogFetcher.js";
+import { createCodexLogin } from "./codexLoginTarget.js";
 
 export interface ProviderRuntimeOptions extends ProviderConfigRuntimeOptions {
   readonly accountSource?: RefreshableProviderSource<AccountProviderConfigSnapshot>;
@@ -110,6 +111,7 @@ export class ProviderRuntime {
       ensureReady,
       dependencies.testConnectivity,
       dependencies.modelCatalogFetcher,
+      createCodexLogin(this.#configRuntime),
     );
     this.#modelSelectionRuntime = createModelSelectionService(
       createNodeModelSelectionFacade(this.registryService),

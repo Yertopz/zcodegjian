@@ -4,6 +4,7 @@
 
 import {
   AMEND_WORKFLOW_TOOL_NAME,
+  CREATE_AGENT_TOOL_NAME,
   CREATE_WORKFLOW_TOOL_NAME,
   EVAL_WORKFLOW_SNIPPET_TOOL_NAME,
   GET_WORKFLOW_RUN_TOOL_NAME,
@@ -52,7 +53,8 @@ import {
   exitPlanModeToolEntry,
 } from "./plan-mode.js";
 import { askUserQuestionToolEntry } from "./ask-user-question.js";
-import { sendMessageToolEntry } from "./send-message.js";
+import { createSendMessageToolEntry, sendMessageToolEntry } from "./send-message.js";
+import { createCreateAgentToolEntry, type CreateAgentTarget } from "./create-agent.js";
 import { respondToCoordinatorToolEntry } from "./respond-to-coordinator.js";
 import { createSubmitResultToolEntry, submitResultToolEntry } from "./submit-result.js";
 import { escalateToolEntry } from "./escalate.js";
@@ -146,7 +148,7 @@ export const builtInTools: ToolEntry[] = [
  * 灰度关的语义是「没有任何办法开始一条工作流」，所以创建、修订、保存、快照实验与四个
  * run 面工具一起下架；只读的 run 内省工具也在列，因为关闭态下它们只会指向用户无法再操作的历史。
  * `ListModels` 也在列：它唯一的用途是给一次 run 挑 `subagent_model`，没有 CreateWorkflow 可填时留着它只会把模型引向不存在的工具。
- * 旧的 `Workflow` 工具（`/expert` 脚本通道）是另一个功能，**不在**这份名单里。
+ * 旧的 `Workflow` 工具（`/expert` 脚本通道）是另一个功能，不在这份名单里。
  */
 const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
   CREATE_WORKFLOW_TOOL_NAME,
@@ -166,6 +168,13 @@ interface RegisterBuiltInToolsOptions {
   includeSkill?: boolean;
   includeAgent?: boolean;
   includeSendMessage?: boolean;
+  /**
+   * 「创建者」专用：`CreateAgent` 的写盘目录与登记回调。两者都在装配期确定，
+   * 缺席即不注册——团队模式下团队成员因此天生没有建人能力。
+   */
+  includeCreateAgent?: boolean;
+  createAgentTarget?: CreateAgentTarget;
+  peerMessagesOnly?: boolean;
   includeRespondToCoordinator?: boolean;
   includeSubmitResult?: boolean;
   /**
@@ -180,8 +189,8 @@ interface RegisterBuiltInToolsOptions {
   /** Off-Peak 会话内创建工具面；由 host 的 offPeakToolEnabled flag（灰度/远程门）驱动。 */
   includeOffPeak?: boolean;
   /**
-   * 动态工作流灰度门。**只有显式 false
-   * 才下架** DYNAMIC_WORKFLOW_TOOL_NAMES：缺席代表调用方不参与灰度（TUI、headless、
+   * 动态工作流灰度门。只有显式 false
+   * 才下架 DYNAMIC_WORKFLOW_TOOL_NAMES：缺席代表调用方不参与灰度（TUI、headless、
    * workflow_child），它们必须保留全部工具面；fail-closed 的缺省值落在协议服务端的
    * appRuntimePreferences，不在这一层。
    */
@@ -195,6 +204,22 @@ interface RegisterBuiltInToolsOptions {
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
   silentDuplicateWarnings?: boolean;
+  /**
+   * 模式门（派生工具 / `SendMessage` / `CreateAgent` / `RespondToCoordinator`）的下架入口。
+   *
+   * 本函数历史上只加不减：门判为 false 只 `continue`，已经注册过的同名工具留在 registry 里，
+   * 之后再怎么刷新也摘不掉。而「多智能体模式」这个门的输入（`mainAgentPromptId` /
+   * 本轮 `mainAgentPrompt`）都晚于运行时构造才落值，所以构造时门必然是 false、
+   * `Agent`/`Task` 先被注册，用户选中多智能体模式后模型仍然能派生子智能体。
+   * 传本回调后模式门具备双向语义：门为真就注册，为假就摘掉。
+   * 门值因此是三态：真 / 假 / 未参与（`undefined`）。未参与表示该调用方没有这项信息，
+   * 必须保持既有注册状态，不能当成假去下架——第二个装配入口
+   * （`refreshBranchAwareBuiltInTools`）拿不到 deps，只能省略 `SendMessage` 与
+   * `RespondToCoordinator` 的门，若按「非 true 即假」处理就会把团队入口静默删掉。
+   * 只对模式门生效——灰度门（Cron / OffPeak / Workflow）省略选项即等于关闭，
+   * 不存在「先注册后收回」的时序问题，保持原样。
+   */
+  unregister?: (name: string) => void;
 }
 
 export function registerBuiltInTools(
@@ -206,7 +231,25 @@ export function registerBuiltInTools(
   const allowedTools = options.allowedTools ? new Set(options.allowedTools) : undefined;
   const disallowedTools = createToolRuleNameSet(options.disallowedTools);
 
-  for (const entry of builtInTools) {
+  // 模式门为假时把同名工具从 registry 摘掉（见 options.unregister 的说明）。
+  const dropModeGatedTool = (name: string): void => {
+    options.unregister?.(name);
+  };
+
+  // CreateAgent 由装配期选项现场构造，门为假时它压根不进 toolEntries——循环碰不到这个工具名，
+  // 所以必须在这里单独下架：收回「创建者」身份或切到多智能体模式后，它不能靠「以前注册过」赖在工具表里。
+  if (options.includeCreateAgent !== true) {
+    dropModeGatedTool(CREATE_AGENT_TOOL_NAME);
+  }
+
+  // CreateAgent 需要写盘目录与登记回调，接不上静态清单：它由装配期选项现场构造，
+  // 之后与其它工具走同一套 allowed/disallowed/灰度过滤。
+  const toolEntries =
+    options.includeCreateAgent === true && options.createAgentTarget
+      ? [...builtInTools, createCreateAgentToolEntry({ target: options.createAgentTarget })]
+      : builtInTools;
+
+  for (const entry of toolEntries) {
     if (
       options.embeddedSearchEnabled === true &&
       (entry.metadata.name === "Glob" || entry.metadata.name === "Grep")
@@ -220,18 +263,25 @@ export function registerBuiltInTools(
       continue;
     }
     if (isSubagentDispatchToolName(entry.metadata.name) && options.includeAgent !== true) {
+      dropModeGatedTool(entry.metadata.name);
       continue;
     }
     if (entry.metadata.name === "Skill" && options.includeSkill === false) {
       continue;
     }
-    if (entry.metadata.name === "SendMessage" && options.includeSendMessage !== true) {
+    // 这两个门用「显式 false 才下架」而不是「非 true 就下架」：`refreshBranchAwareBuiltInTools`
+    // 是第二个装配入口，它手里没有 deps（拿不到 coordinatorResponsePort），只能省略这两个选项。
+    // 若按「非 true」处理，省略就等于把已注册的 SendMessage 悄悄摘掉——工具面在选一次主提示词
+    // 之后少了一半团队能力，比多留一个工具更难查。省略＝该入口不参与此门，保持既有注册状态。
+    if (entry.metadata.name === "SendMessage" && options.includeSendMessage === false) {
+      dropModeGatedTool(entry.metadata.name);
       continue;
     }
     if (
       entry.metadata.name === "RespondToCoordinator" &&
-      options.includeRespondToCoordinator !== true
+      options.includeRespondToCoordinator === false
     ) {
+      dropModeGatedTool(entry.metadata.name);
       continue;
     }
     if (entry.metadata.name === "submit_result" && options.includeSubmitResult !== true) {
@@ -277,6 +327,9 @@ function resolveBuiltInToolEntryForBranch(
   entry: ToolEntry,
   options: RegisterBuiltInToolsOptions,
 ): ToolEntry {
+  if (entry.metadata.name === "SendMessage") {
+    return createSendMessageToolEntry({ peerOnly: options.peerMessagesOnly });
+  }
   if (entry.metadata.name === "Bash") {
     return createBashToolEntry({
       bashTimeoutPolicy: options.bashTimeoutPolicy,
@@ -286,7 +339,7 @@ function resolveBuiltInToolEntryForBranch(
   if (entry.metadata.name === SUBMIT_RESULT_TOOL_NAME && options.submitResultSchema !== undefined) {
     return createSubmitResultToolEntry(options.submitResultSchema);
   }
-  // 灰度门同时管工具面和**描述**：Agent / Task 的描述里有一条「工作流请求必须改用
+  // 灰度门同时管工具面和描述：Agent / Task 的描述里有一条「工作流请求必须改用
   // CreateWorkflow」，关闭时那个工具不存在，留着只会把模型指向不存在的工具。用的是与注册过滤同一个
   // options.includeDynamicWorkflow，所以首次装配与分支刷新产出的描述必然一致。
   if (entry.metadata.name === "Agent") {

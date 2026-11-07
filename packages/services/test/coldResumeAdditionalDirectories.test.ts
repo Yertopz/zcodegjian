@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createZCodeAgentService } from "../src/zcode-agent/zcodeAgentService.js";
@@ -91,8 +91,9 @@ async function withService(
 test("订阅参数带上该工作区的附加目录", async (t) => {
   await withService(
     t,
+    // 工作区路径随系统变化，Windows 使用反斜线，按 basename 判断才能覆盖真实路径。
     async (workspaceKey) =>
-      workspaceKey.endsWith("/workspace") ? ["/work/extra", "/work/lib"] : undefined,
+      basename(workspaceKey) === "workspace" ? ["/work/extra", "/work/lib"] : undefined,
     async ({ service, workspacePath, outPath }) => {
       await service.subscribeConversationV4({
         workspacePath,

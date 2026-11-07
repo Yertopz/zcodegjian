@@ -23,7 +23,6 @@ import { useOAuth } from "./hooks/useOAuth.js";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
 import { LoginApiKeyForm } from "./login/LoginApiKeyForm.js";
 import { renderOAuthProviderIcon } from "./lib/oauthProviderIcon.js";
-import { ThemeHeroVisual } from "./openWorkspacePageThemeHero.js";
 import { useZCodeStore } from "./store/StoreProvider.js";
 
 interface WelcomeScreenProps {
@@ -34,10 +33,9 @@ export type LoginCompleteReason = "oauth" | "apiKey" | "skip";
 
 export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
   return (
-    <main className="relative flex h-full min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-6 text-foreground sm:px-6">
-      <ThemeHeroVisual className="absolute inset-0" />
+    <main className="relative flex h-full min-h-0 items-start justify-center overflow-y-auto bg-background px-4 py-6 text-foreground sm:px-6">
       <div className="pointer-events-none absolute left-0 top-0 right-0 z-10 flex h-12 w-full items-center [app-region:drag]" />
-      <section className="relative z-10 w-full flex flex-col gap-10 max-w-sm rounded-2xl border border-popover-border bg-background p-8 text-ui-base/relaxed shadow-md sm:p-10">
+      <section className="relative z-10 my-auto flex w-full max-w-sm flex-col gap-8 rounded-2xl border border-popover-border bg-popover p-8 text-ui-base/relaxed shadow-md sm:p-10">
         <LoginPanel active onComplete={onComplete} />
       </section>
     </main>
@@ -319,7 +317,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
                   <Button
                     key={provider.id}
                     variant="default"
-                    className="h-10 w-full text-ui-base"
+                    className="h-11 w-full text-ui-base"
                     size="lg"
                     data-testid={
                       provider.id === BIGMODEL_PROVIDER_ID
@@ -340,7 +338,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
                 ))}
                 <Button
                   variant="outline"
-                  className="h-10 w-full text-ui-base"
+                  className="h-11 w-full text-ui-base"
                   size="lg"
                   data-testid={TID_LOGIN_USE_API_KEY_BUTTON}
                   onClick={() => {
@@ -379,7 +377,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
             </div>
             <Button
               variant="outline"
-              className="h-10 w-full text-ui-base"
+              className="h-11 w-full text-ui-base"
               size="lg"
               data-testid={TID_OAUTH_CANCEL}
               onClick={() => {
@@ -409,7 +407,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
               </AlertDescription>
             </Alert>
             <Button
-              className="h-10 w-full text-ui-base"
+              className="h-11 w-full text-ui-base"
               size="lg"
               onClick={() => {
                 const retryProvider = resolveLoginRetryProvider({
@@ -430,7 +428,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
             </Button>
             <Button
               variant="outline"
-              className="h-10 w-full text-ui-base"
+              className="h-11 w-full text-ui-base"
               size="lg"
               data-testid={TID_OAUTH_CANCEL}
               onClick={() => {
@@ -461,11 +459,11 @@ function LoginPanelHeader({
   children: ReactNode;
 }) {
   return (
-    <header className="flex flex-col items-center gap-3 text-center">
+    <header className="flex flex-col items-center gap-4 text-center">
       <LoginPanelLogo />
       <div className="flex flex-col items-center gap-1 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-ui-base/relaxed text-foreground-subtle">{description}</p>
+        <h1 className="text-balance text-ui-xl font-semibold">{title}</h1>
+        <p className="text-pretty text-ui-base/relaxed text-foreground-subtle">{description}</p>
       </div>
       {children}
     </header>
@@ -474,9 +472,8 @@ function LoginPanelHeader({
 
 function LoginPanelLogo() {
   return (
-    // 登录 logo 壳是固定深色底，边框不能跟随浅色主题 token，否则浅色主题下边框过重。
     <div
-      className="relative mb-1 flex size-16 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,#000000_0%,#151718_100%)] text-[#ffffff] shadow-lg/20 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:border before:border-[rgba(255,255,255,0.1)]"
+      className="relative mb-1 flex size-16 items-center justify-center rounded-2xl bg-foreground text-background"
       aria-label="ZCode"
       role="img"
     >

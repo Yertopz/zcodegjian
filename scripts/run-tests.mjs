@@ -39,6 +39,11 @@ const TEST_PACKAGES = [
   // 这两处漏键都是**静默**的（用户以为关了、模型照样能调），只能靠测试钉住。
   "packages/services",
   "packages/ui",
+  // Codex 登录链路的两个静默失败点：**必须在这里登记**，否则以下断言不进 CI ——
+  // ① 真实 `~/.codex/auth.json` 把用不到的键写成 `null`（`{"OPENAI_API_KEY": null}`），
+  //    schema 用 `.optional()` 会整次登录失败且界面只报「代理不可用」，指错方向；
+  // ② 登录只写配置不发请求，代理端口填错过去会「登录成功」，直到首次聊天才崩。
+  "packages/provider-node",
   // 桌面端唯一的那条链路：protocol mcpServers → runtime config（逐字段白名单重建）。
   // 漏字段的后果是「设置页显示已关闭，agent 侧工具面一个没少」，同样只能靠测试钉住。
   "apps/zcode-cli/packages/bootstrap",

@@ -3,11 +3,25 @@
 本仓库用 GitHub Actions 承担三件事：日常校验（`ci.yml`）、发布打包（`release.yml`）、
 跨平台实测（`cross-platform.yml`）。三者都在 `.github/workflows/` 下，无需自建 runner。
 
-## 为什么发布必须走 CI
+## 平台构建环境
 
 **Windows 安装包（nsis）无法在 Linux 上交叉打包。** 桌面端的原生依赖（`node-pty` 预编译产物、
 `bundled-tools` 里的 ripgrep 等）按目标平台分目录准备，Linux 机器上拿不到 Windows 的原生产物。
-因此 Windows 包只能由 `windows-latest` runner 产出，不能靠本地打完再传。
+因此 Windows 安装包需要在 Windows 环境构建：可由 `windows-latest` runner 产出，也可在 Windows 本机构建。正式发布的自动构建与上传由 `release.yml` 完成；本地生成的安装包可用于离线分发与人工验收。
+
+本地生成正式环境的 Windows 安装包时，先显式指定与发布工作流相同的环境；未指定时可能生成测试环境的 Preview 包：
+
+```powershell
+$env:ZCODE_ENV = 'production'
+$env:ZCODE_PREVIEW_IDENTITY = '0'
+pnpm bundle:desktop --os win --arch x64
+```
+
+Windows exe 的应用图标与版本资源（`ProductName`、`CompanyName` 等）由 `afterPack` 用纯 JS 的
+`resedit` 写入并在出包时回读校验（`packages/desktop/scripts/windows-executable-resources.mjs`）。
+`win.signAndEditExecutable` 因此保持 `false`：打开它会走需要联网下载 `winCodeSign` 的 `rcedit`。
+NSIS 快捷方式指向 `$appExe,0`，资源写不进去会直接表现为桌面/开始菜单显示 Electron 默认图标，
+所以该步骤是 fail-closed 的，不要跳过。
 
 ## `ci.yml` — 日常校验
 

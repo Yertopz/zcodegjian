@@ -24,6 +24,8 @@ export interface AgentProfile {
   description: string;
   disallowedTools?: readonly string[];
   injectAgentsMd?: boolean;
+  /** `"team"` = 多智能体团队成员（CreateAgent 创建）；缺省 = 普通子智能体。 */
+  kind?: "team";
   maxTurns?: number;
   mcpServers?: readonly string[];
   memory?: AgentMemoryScope;
@@ -60,6 +62,8 @@ const VALID_COLORS = new Set<NonNullable<AgentProfile["color"]>>([
 ]);
 
 const VALID_PERMISSION_MODES = new Set<AgentPermissionMode>(["auto", "plan"]);
+
+const VALID_KINDS = new Set<NonNullable<AgentProfile["kind"]>>(["team"]);
 
 const VALID_MEMORY_SCOPES = new Set<AgentMemoryScope>(["user", "project", "local"]);
 
@@ -179,6 +183,7 @@ export function parseAgentProfileFromMarkdown(input: {
 
   const modelSelection = resolveProfileModelSelection(frontmatter);
   const color = normalizeColor(scalarString(frontmatter.color));
+  const kind = normalizeKind(scalarString(frontmatter.kind));
   const parsedPermissionMode = normalizePermissionMode(scalarString(frontmatter.permissionMode));
   // 项目级 subagent markdown 属于仓库输入，不能通过 frontmatter 把
   // child runtime 提升到 bypass/yolo；权限模式只接受用户级或受信插件配置。
@@ -213,6 +218,7 @@ export function parseAgentProfileFromMarkdown(input: {
       ...(input.path ? { path: input.path } : {}),
       ...(modelSelection ? { modelSelection } : {}),
       ...(color ? { color } : {}),
+      ...(kind ? { kind } : {}),
       ...(permissionMode ? { permissionMode } : {}),
       ...(maxTurns ? { maxTurns } : {}),
       ...(memory ? { memory } : {}),
@@ -314,6 +320,13 @@ function normalizeColor(value: string | undefined): AgentProfile["color"] | unde
   if (!value) return undefined;
   return VALID_COLORS.has(value as NonNullable<AgentProfile["color"]>)
     ? (value as NonNullable<AgentProfile["color"]>)
+    : undefined;
+}
+
+function normalizeKind(value: string | undefined): AgentProfile["kind"] | undefined {
+  if (!value) return undefined;
+  return VALID_KINDS.has(value as NonNullable<AgentProfile["kind"]>)
+    ? (value as NonNullable<AgentProfile["kind"]>)
     : undefined;
 }
 

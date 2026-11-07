@@ -20,6 +20,7 @@ export interface V4ComposerDraft {
   /** 有合法 mode 表示已经初始化；没有模型仍是明确空态，不能按旧文本草稿补默认。 */
   mode?: SubmissionMode;
   planEnabled?: boolean;
+  mainAgentPromptId?: string | null;
   /** 已处理的工具变更，防止重连快照再次覆盖用户选择。 */
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
@@ -116,6 +117,9 @@ function readDraft(value: unknown): V4ComposerDraft | null {
     );
   return {
     text: value.text,
+    ...(value.mainAgentPromptId === null || typeof value.mainAgentPromptId === "string"
+      ? { mainAgentPromptId: value.mainAgentPromptId }
+      : {}),
     ...(typeof value.editorStateJson === "string"
       ? { editorStateJson: value.editorStateJson }
       : {}),

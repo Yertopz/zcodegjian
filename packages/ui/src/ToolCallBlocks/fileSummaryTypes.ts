@@ -302,6 +302,13 @@ export interface ToolCallBlockRenderContext {
    * 由 PluginUiSessionProvider 在边界注入。缺省表示宿主不提供，带 ui:// 资源的工具回退普通 MCP 卡片。
    */
   pluginUi?: PluginUiToolBinding;
+  /**
+   * 多智能体群聊视图：本条消息的发起成员展示信息。宿主按工具来源/目标成员
+   * 从 groupChatMembers 解析后注入；缺席即按普通工具卡渲染。
+   */
+  groupChatMember?: import("@/v4/conversationRowContext.js").GroupChatMemberInfo;
+  /** 群聊视图的会话级开关；与 groupChatMember 一起由宿主注入。 */
+  groupChatActive?: boolean;
 }
 
 export interface EditKindSource {

@@ -1,3 +1,4 @@
+import { restoreMainAgentPromptSelection } from "./main-agent-prompt.js";
 import { restorePermissionGrantMarker } from "../helpers/permission-grant-resume.js";
 import { executionStateSchema, resolveExecutionState } from "@zcode/shared";
 import { SESSION_ENTRY_EXECUTION_STATE } from "@zcode/contracts";
@@ -192,6 +193,7 @@ export async function resumeFromStore(
   await restoreWorkspaceCheckpointEntries(this, traceContext);
   await restoreWorkspaceFileRewindEntries(this, traceContext);
   const restoredEvents = await this.eventStore.getEvents(this.sessionId);
+  await restoreMainAgentPromptSelection(this, restoredEvents);
   const restoredModeEvents = restoredEvents.filter(
     (event) =>
       event.type === SessionEventType.SessionCreated ||

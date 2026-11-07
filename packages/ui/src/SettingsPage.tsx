@@ -65,7 +65,9 @@ import {
   type CodingPlanUsageSource,
 } from "@/settings/usage-stats/CodingPlanUsagePanel.js";
 import { buildPersonalCodingPlanUsageSource } from "@/lib/codingPlanUsageSources.js";
+import { MainAgentPromptsSection } from "@/settings/MainAgentPromptsSection.js";
 import { SubagentsSection } from "@/settings/SubagentsSection.js";
+import { MultiAgentSection } from "@/settings/MultiAgentSection.js";
 import { AutomationsSection } from "@/settings/AutomationsSection.js";
 import { SegmentPill } from "@/settings/PluginStoreListView.js";
 import { PluginsSection } from "@/settings/PluginsSection.js";
@@ -1937,12 +1939,19 @@ export function SettingsPage({
                             workspaceIdentity={activeWorkspaceIdentity}
                             workspacePath={activeWorkspacePath ?? undefined}
                           />
+                        ) : activeSection === "mainAgentPrompts" ? (
+                          <MainAgentPromptsSection
+                            workspacePath={activeWorkspacePath}
+                            workspaceIdentity={activeWorkspaceIdentity}
+                          />
                         ) : activeSection === "subagents" ? (
                           <SubagentsSection
                             onManageModels={handleOpenModelProviderSettings}
                             workspacePath={activeWorkspacePath}
                             workspaceIdentity={activeWorkspaceIdentity}
                           />
+                        ) : activeSection === "multiAgent" ? (
+                          <MultiAgentSection workspacePath={activeWorkspacePath} />
                         ) : activeSection === "automations" ? (
                           <AutomationsSection
                             workspacePath={activeWorkspacePath}

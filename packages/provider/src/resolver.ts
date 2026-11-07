@@ -62,6 +62,7 @@ export function serializeRegistryProviderConfig(
       baseUrl: config.api.baseUrl,
       ...(config.api.headers == null ? {} : { headers: config.api.headers }),
     },
+    ...(config.network == null ? {} : { network: { ...config.network } }),
     ...(config.builtinModelIds == null ? {} : { builtinModelIds: [...config.builtinModelIds] }),
     ...(config.personalModelIds == null ? {} : { personalModelIds: [...config.personalModelIds] }),
     ...(config.modelOrder == null ? {} : { modelOrder: [...config.modelOrder] }),

@@ -1,7 +1,11 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
-import type { ProviderSettingsView } from "@zcode/services";
+import type {
+  ProviderSettingsCodexLoginInput,
+  ProviderSettingsCodexLoginOutcome,
+  ProviderSettingsView,
+} from "@zcode/services";
 import { useServices } from "@/hooks/useServices.js";
 import { logger } from "@/logger.js";
 import { useProviderSettingsServiceView } from "@/hooks/useProviderSettingsView.js";
@@ -90,6 +94,17 @@ export function useModelProviders(target: {
       const created = await providerSettingsService.createPersonalProvider(input);
       commitProviderSettingsView(created.view);
       return created;
+    },
+    [commitProviderSettingsView, providerSettingsService],
+  );
+
+  const loginCodex = useCallback(
+    async (input: ProviderSettingsCodexLoginInput): Promise<ProviderSettingsCodexLoginOutcome> => {
+      // Host 侧读本机 Codex 凭据并写个人 Provider；返回的 View 已是刷新后的权威快照。
+      // 与 createPersonalProvider 同一提交边界，避免登录成功后列表仍显示旧状态。
+      const result = await providerSettingsService.loginCodex(input);
+      commitProviderSettingsView(result.view);
+      return { providerId: result.providerId, modelId: result.modelId };
     },
     [commitProviderSettingsView, providerSettingsService],
   );
@@ -233,6 +248,7 @@ export function useModelProviders(target: {
     refresh,
     saveProvider,
     createPersonalProvider,
+    loginCodex,
     addPersonalModel,
     savePersonalModelDraft,
     setPersonalModelEnabled,

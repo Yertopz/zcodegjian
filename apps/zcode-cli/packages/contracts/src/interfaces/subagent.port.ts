@@ -72,7 +72,16 @@ export interface SubagentSendMessageOptions {
   signal?: AbortSignal;
 }
 
-export type SubagentSendMessageDelivery = "queued" | "steered" | "resumed_background";
+export type SubagentSendMessageDelivery = "queued" | "steered" | "resumed_background" | "launched";
+
+/**
+ * 「多智能体」@ 次数快照：`remaining` 是本会话运行时还剩几次可发，`limit` 是设置页的上限。
+ * 收发双方都要看到它——发出方据此决定还发不发，接收方在注入提示里看到同样口径。
+ */
+export interface SubagentMentionBudget {
+  remaining: number;
+  limit: number;
+}
 
 export interface SubagentSendMessageResult {
   status: "success" | "failed";
@@ -83,6 +92,7 @@ export interface SubagentSendMessageResult {
   agentId?: string;
   taskId?: string;
   outputFile?: string;
+  mentionBudget?: SubagentMentionBudget;
 }
 
 export type SubagentTaskStatus =

@@ -2354,33 +2354,35 @@ export function createLocalServices(options: {
         }),
       };
     },
-    ...(isDesktopAttachedRemote
-      ? { sessionRuntimePreferencesAuthority: "external" as const }
-      : {
-          sessionRuntimePreferencesAuthority: "local" as const,
-          resolveSessionRuntimePreferences: async (scope) => {
-            // 预算已统一，不能把可选远端配置作为本地/手机 shared-host 建会话的前置条件。
-            const settings = await settingService.get();
-            const modelContextBudgetStrategy = DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY;
-            return {
-              askUserQuestionAutoResolutionEnabled:
-                settings.askUserQuestionAutoResolutionEnabled !== false,
-              nativeSearchEnhancementsEnabled: settings.nativeSearchEnhancementsEnabled !== false,
-              memoryEnabled: settings.memoryEnabled === true,
-              // F14：工具搜索模式随 runtime-materialization 下发；缺席（老配置）= off。
-              ...(settings.toolSearchMode ? { toolSearchMode: settings.toolSearchMode } : {}),
-              modelContextBudgetStrategy,
-              // 工具与权限页的危险命令策略。缺席即严格（CLI 侧解释），所以这里原样透传
-              // undefined 而不是补一份默认值 —— 补默认值会让"用户没配过"与"用户显式选了严格"
-              // 变成同一个事实，日后无法区分。
-              dangerousCommandPolicy: settings.dangerousCommandPolicy,
-              // user-execution 只消费 Shell；共享默认策略是统一 result schema 的兼容占位，
-              // 不会覆盖 runtime-materialization 阶段已经固定的 strategy。
-              ...(scope === "user-execution" && settings.integratedTerminalShell
-                ? { integratedTerminalShell: settings.integratedTerminalShell }
-                : {}),
-            };
-          },
+    sessionRuntimePreferencesAuthority: isDesktopAttachedRemote
+      ? ("external" as const)
+      : ("local" as const),
+    resolveSessionRuntimePreferences: async (scope) => {
+      // 预算已统一，不能把可选远端配置作为本地/手机 shared-host 建会话的前置条件。
+      const settings = await settingService.get();
+      const modelContextBudgetStrategy = DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY;
+      return {
+        askUserQuestionAutoResolutionEnabled:
+          settings.askUserQuestionAutoResolutionEnabled !== false,
+        nativeSearchEnhancementsEnabled: settings.nativeSearchEnhancementsEnabled !== false,
+        memoryEnabled: settings.memoryEnabled === true,
+        ...(scope === "main-agent-prompts" ? { mainAgentPrompts: settings.mainAgentPrompts } : {}),
+        // 主提示词和工具搜索复用同一设置所有者；新会话冻结工具搜索模式。
+        ...(settings.toolSearchMode ? { toolSearchMode: settings.toolSearchMode } : {}),
+        modelContextBudgetStrategy,
+        // 工具与权限页的危险命令策略。缺席即严格（CLI 侧解释），所以这里原样透传
+        // undefined 而不是补一份默认值 —— 补默认值会让"用户没配过"与"用户显式选了严格"
+        // 变成同一个事实，日后无法区分。
+        dangerousCommandPolicy: settings.dangerousCommandPolicy,
+        // user-execution 只消费 Shell；共享默认策略是统一 result schema 的兼容占位，
+        // 不会覆盖 runtime-materialization 阶段已经固定的 strategy。
+        ...(scope === "user-execution" && settings.integratedTerminalShell
+          ? { integratedTerminalShell: settings.integratedTerminalShell }
+          : {}),
+      };
+    },
+    ...(!isDesktopAttachedRemote
+      ? {
           // X16：冷恢复订阅按工作区下发附加目录；与 composer/中枢同一份设置来源。
           // desktop-attached-remote 不注入：远端 Host 自己持有设置，本地路径对远端无意义。
           resolveWorkspaceAdditionalDirectories: async (workspaceKey: string) => {
@@ -2391,7 +2393,8 @@ export function createLocalServices(options: {
             );
             return list.length > 0 ? list : undefined;
           },
-        }),
+        }
+      : {}),
   });
   providerConnectivityAgentService = zcodeAgentService;
   // Helper health probe 短暂超时不应在 Computer Use turn 中途回收 Agent。resolver 会把 restart

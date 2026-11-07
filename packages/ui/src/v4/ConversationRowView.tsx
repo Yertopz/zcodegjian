@@ -107,6 +107,11 @@ import {
   isConversationReasoningRowVisible,
   type ConversationRowRenderContext,
 } from "@/v4/conversationRowContext.js";
+import {
+  resolveGroupChatMemberByName,
+  resolveGroupChatMemberForToolCall,
+} from "@/v4/groupChatMemberJoin.js";
+import { ConversationAgentReply } from "@/v4/ConversationAgentReply.js";
 import { toolCallRowToLegacyNode } from "@/v4/toolCallRowAdapter.js";
 import { CodeCommentAttachmentChip } from "@/v4/composer/CodeCommentAttachmentChip.js";
 import {
@@ -1991,6 +1996,11 @@ const ToolCallRowView = memo(function ToolCallRowView({
   }
   // 工具行去掉纵向内边距（对齐 z-code-2 无 per-tool padding）；连续工具间距由
   // ConversationAssistantWorkItems 的 gap-4 组容器统一给。
+  // 多智能体群聊视图：SendMessage 消息按目标/发起成员解析展示信息后注入，
+  // 渲染器据此切换群聊气泡；解析不到成员时渲染器回落普通工具卡。
+  const groupChatMember = context.groupChatActive
+    ? resolveGroupChatMemberForToolCall(toolCallNode.toolCall, context.groupChatMembers)
+    : undefined;
   return (
     <RowShell rowId={row.rowId} className="py-0">
       <div data-conversation-selectable="true">
@@ -2000,6 +2010,8 @@ const ToolCallRowView = memo(function ToolCallRowView({
           theme={context.theme}
           codePreviewSettings={context.codePreviewSettings}
           showTodoToolCalls={context.messageStreamShowTodos === true}
+          groupChatActive={context.groupChatActive}
+          groupChatMember={groupChatMember}
           onOpenCodeViewer={context.onOpenCodeViewer}
           onOpenFileLink={context.onOpenFileLink}
           onOpenBrowserUrl={context.onOpenBrowserUrl}
@@ -2078,7 +2090,13 @@ const ToolCallRowView = memo(function ToolCallRowView({
   );
 });
 
-const SubagentRowView = memo(function SubagentRowView({ row }: { row: SubagentRow }) {
+const SubagentRowView = memo(function SubagentRowView({
+  row,
+  context,
+}: {
+  row: SubagentRow;
+  context: ConversationRowRenderContext;
+}) {
   // subagent 行已经和 Agent/Task 工具行配对渲染；裸行只保留异常兜底摘要，
   // 避免再生成一个“子会话”卡片或第二套下钻入口。
   const summary = (
@@ -2087,11 +2105,49 @@ const SubagentRowView = memo(function SubagentRowView({ row }: { row: SubagentRo
       {row.summaryText ? ` — ${row.summaryText}` : ""}
     </>
   );
-  return (
-    <RowShell rowId={row.rowId}>
-      <div className="text-ui-sm text-[var(--color-foreground-subtle)]">{summary}</div>
-    </RowShell>
+  const mutedSummary = (
+    <div className="text-ui-sm text-[var(--color-foreground-subtle)]">{summary}</div>
   );
+  // 群聊里成员用 SendMessage 派单时没有 Agent/Task 工具行，回复卡就没有宿主，
+  // 成员那句回复只剩这条灰色摘要（用户看到的“回复没显示”）。成员可解析时改由
+  // 回复卡承载身份、引用和正文；拿不到正文时退回原摘要，行不留空白。
+  const member = context.groupChatActive
+    ? resolveGroupChatMemberByName(row.subagentType, context.groupChatMembers)
+    : undefined;
+  const childSessionId = row.childSessionId;
+  if (
+    member &&
+    childSessionId &&
+    childSessionId !== context.sessionId &&
+    row.startedAt !== undefined
+  ) {
+    const title = row.summaryText;
+    return (
+      <RowShell rowId={row.rowId}>
+        <ConversationAgentReply
+          childSessionId={childSessionId}
+          startedAt={row.startedAt}
+          agentName={row.subagentType}
+          context={context}
+          running={row.status === "running"}
+          emptyFallback={mutedSummary}
+          onOpen={
+            context.sessionId && context.onOpenSubagentSession
+              ? () =>
+                  context.onOpenSubagentSession?.({
+                    rootSessionId: context.rootSessionId ?? context.sessionId!,
+                    parentSessionId: context.sessionId!,
+                    childSessionId,
+                    subagentType: row.subagentType,
+                    title,
+                  })
+              : undefined
+          }
+        />
+      </RowShell>
+    );
+  }
+  return <RowShell rowId={row.rowId}>{mutedSummary}</RowShell>;
 });
 
 /**
@@ -2166,7 +2222,7 @@ function ConversationRowViewImpl({
       }
       return <ToolCallRowView row={row} context={context} />;
     case "subagent":
-      return <SubagentRowView row={row} />;
+      return <SubagentRowView row={row} context={context} />;
     case "artifact":
       return <ArtifactRowView row={row} />;
     default:

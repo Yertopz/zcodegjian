@@ -18,6 +18,13 @@ import {
   KEY_TAB_COMMAND,
 } from "lexical";
 import { useZCodeIntl } from "../i18n/IntlProvider.js";
+import { useSubagents } from "@/hooks/useSubagents.js";
+import { useMultiAgentConfig } from "@/hooks/useMultiAgentConfig.js";
+import {
+  resolveComposerMultiAgentMode,
+  resolveComposerPromptScopeKey,
+  useComposerPromptMode,
+} from "@/store/composerPromptModeStore.js";
 import {
   extractActivePromptInputTrigger,
   getActivePromptInputTokenTailLength,
@@ -33,6 +40,7 @@ import {
 } from "./components/MentionPanel.js";
 import {
   buildVisibleMentionGroups,
+  filterMentionItemsWithOptions,
   hasMentionQuery,
   MENTION_DEFAULT_GROUP_PREVIEW_LIMIT,
   MENTION_FILES_ONLY_DEFAULT_PREVIEW_LIMIT,
@@ -49,6 +57,9 @@ import { usePluginsMentionProvider } from "./providers/pluginsMentionProvider.js
 import { useSessionsMentionProvider } from "./providers/sessionsMentionProvider.js";
 import { useSkillsMentionProvider } from "./providers/skillsMentionProvider.js";
 import { useWhiteboardMentionProvider } from "./providers/whiteboardMentionProvider.js";
+import { mapAgentsToMentionItems } from "./providers/agentsMentionProvider.js";
+import { mapTeamMembersToMentionItems } from "./providers/teamMembersMentionProvider.js";
+import { TeamMemberMentionOptionContent } from "./components/TeamMemberMentionOptionContent.js";
 import type { MentionItem } from "./mentionTypes.js";
 import {
   getActivePromptInputTokenReplacementRange,
@@ -139,7 +150,7 @@ export function MentionPlugin({
   onWhiteboardMentionSelected,
 }: MentionPluginProps & { provider: ZCodeProvider }) {
   const [editor] = useLexicalComposerContext();
-  const { intl } = useZCodeIntl();
+  const { intl, locale } = useZCodeIntl();
   const [activeTrigger, setActiveTrigger] = useState<ActivePromptInputTrigger | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const dismissedSignatureRef = useRef<string | null>(null);
@@ -164,6 +175,60 @@ export function MentionPlugin({
   const isSessionTrigger = activeTrigger?.trigger === "#";
   const isSkillTrigger = activeTrigger?.trigger === "$";
 
+  // 与 / 面板共用工作区目录和同名优先级；选中只写入草稿，不在 UI 创建运行。
+  const {
+    agents,
+    loading: agentsLoading,
+    error: agentsError,
+    refresh: refreshAgents,
+  } = useSubagents(workspacePath, provider, workspaceIdentity);
+  // 提示词模式判定：composer 里的主提示词选择器把「当前提示词」投影到 store，
+  // 这里只读（面板不在 composer 内部，拿不到草稿）。pending/缺键时回落到团队开关。
+  const { settings: multiAgentSettings } = useMultiAgentConfig();
+  const promptScopeKey = useMemo(
+    () => resolveComposerPromptScopeKey(workspacePath, workspaceIdentity, sessionId ?? null),
+    [sessionId, workspaceIdentity, workspacePath],
+  );
+  const composerPromptMode = useComposerPromptMode(promptScopeKey);
+  const teamMode = resolveComposerMultiAgentMode(composerPromptMode, multiAgentSettings?.enabled);
+  const agentItems = useMemo(
+    () =>
+      isOpen && isContextTrigger
+        ? filterMentionItemsWithOptions(
+            mapAgentsToMentionItems(agents, { locale, teamMode }),
+            deferredActiveQuery,
+          )
+        : [],
+    [agents, deferredActiveQuery, isContextTrigger, isOpen, locale, teamMode],
+  );
+  // 团队成员独立成组：只有多智能体模式才展示（普通会话里成员不是协作对象，
+  // 挂一个空分组只会制造噪音）。成员条目自身与子智能体共用 `@名字` token 语义。
+  const teamMemberItems = useMemo(
+    () =>
+      isOpen && isContextTrigger && teamMode
+        ? filterMentionItemsWithOptions(
+            mapTeamMembersToMentionItems(agents, { locale }),
+            deferredActiveQuery,
+          )
+        : [],
+    [agents, deferredActiveQuery, isContextTrigger, isOpen, locale, teamMode],
+  );
+  // 成员目录在面板挂载时只取一次，而 CreateAgent 新建的成员是运行期落盘的。
+  // 不刷新就会出现「刚建好的团队成员 @ 不到、必须刷新页面」的错觉；这里在每次
+  // 打开 @ 面板时同步一次目录，关闭后再打开可以再次同步。
+  const agentsRefreshedRef = useRef(false);
+  useEffect(() => {
+    const panelOpen = isOpen && isContextTrigger;
+    if (!panelOpen) {
+      agentsRefreshedRef.current = false;
+      return;
+    }
+    if (agentsRefreshedRef.current) {
+      return;
+    }
+    agentsRefreshedRef.current = true;
+    void refreshAgents();
+  }, [isContextTrigger, isOpen, refreshAgents]);
   // 修复说明：之前把 @ 面板拆成了两层，导致用户输入 query 后还要再确认一次，
   // 实际感受像“按回车之后才开始搜”。现在改成单层分组面板，query 一变化就直接展示各分组结果。
   const skillsResult = useSkillsMentionProvider(
@@ -221,6 +286,22 @@ export function MentionPlugin({
 
   const panelGroups = useMemo<MentionResultGroup<MentionItem>[]>(() => {
     const groupsById = {
+      subagents: {
+        id: "subagents",
+        title: intl.formatMessage({ id: "chat.mention.subagents.title" }),
+        items: agentItems,
+        loading: agentsLoading,
+        errorText: agentsError,
+        emptyText: intl.formatMessage({ id: "chat.mention.subagents.empty" }),
+      },
+      teamMembers: {
+        id: "teamMembers",
+        title: intl.formatMessage({ id: "chat.mention.teamMembers.title" }),
+        items: teamMemberItems,
+        loading: agentsLoading,
+        errorText: agentsError,
+        emptyText: intl.formatMessage({ id: "chat.mention.teamMembers.empty" }),
+      },
       files: {
         id: "files",
         title: fileResult.title,
@@ -263,12 +344,20 @@ export function MentionPlugin({
       },
     } satisfies Record<MentionPanelGroupId, MentionResultGroup<MentionItem>>;
 
-    // 产品约束：@ 固定为 Plugin → 文件 → 对话 → 画板；旧 # / $ 面板继续走
+    // @ 同时发现 Agent、Plugin、文件、对话和画板；旧 # / $ 面板继续走
     // 原单分组 provider。这里仅重排发现入口，候选自身的 canonical markdown 不变。
     return buildVisibleMentionGroups(
-      getMentionPanelGroupOrder(activeTrigger?.trigger).map((groupId) => groupsById[groupId]),
+      getMentionPanelGroupOrder(activeTrigger?.trigger, { teamMode }).map(
+        (groupId) => groupsById[groupId],
+      ),
     );
   }, [
+    agentItems,
+    agentsError,
+    agentsLoading,
+    teamMode,
+    teamMemberItems,
+    intl,
     fileResult.emptyText,
     fileResult.error,
     fileResult.items,
@@ -314,7 +403,11 @@ export function MentionPlugin({
           // @ 面板之前只用 label/description 自己拼文件行，导致图标、文件名和路径展示
           // 跟输入框里的 mention token 不一致。这里统一复用 fileDisplay，让面板和 token 使用同一套文件语义展示。
           content:
-            item.category === "files" ? (
+            // 团队成员行按分组判定而不是按 category：成员与子智能体共用
+            // `subagents` category（token 语义相同），差异只在这里的展示形态。
+            group.id === "teamMembers" ? (
+              <TeamMemberMentionOptionContent item={item} />
+            ) : item.category === "files" ? (
               <ContextMentionOptionContent item={item} workspacePath={workspacePath} />
             ) : item.category === "skills" ? (
               <span className="min-w-0 flex flex-1 items-center gap-2">

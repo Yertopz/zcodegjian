@@ -194,6 +194,8 @@ The dynamic-workflow timeline draws with a feature-scoped token family:
 - **UI Sans**: use the app's default `font-sans` stack for almost all interface text.
 - **UI Mono**: use `font-mono` for paths, commands, code, identifiers, shortcuts, commit hashes, model IDs, and terminal-like data.
 
+The UI sans stack prefers platform system fonts, with explicit CJK sans-serif fallbacks. Shared theme surface and login/composer constraints are documented in [工作区界面视觉约束](docs/development/179-apple-ui-refresh.md).
+
 ### UI font tokens
 
 All interface typography must use the dedicated `text-ui-*` scale. The Appearance setting controls `--ui-font-size`, whose default is `14px`:
@@ -466,6 +468,10 @@ Overlay rules:
 - Tool output, terminal-like blocks, paths, hashes, and commands should bias toward monospace
 - Diff UI must use diff-specific semantic colors, not generic success/destructive colors
 - Dense operational panels are preferred over marketing-card styling
+- Multi-agent message cards keep identity in a single header row: avatar, `name · description`, and the timestamp pushed to the trailing edge. Body text and any quoted trigger indent under the text column (`pl-6` = avatar `size-4` + `gap-2`), not under the avatar.
+- Quote strips inside a message card use `bg-surface`, `rounded-md`, and at most two lines; the full text belongs in `title`. Only real user input may be quoted as `You: …`.
+- A message that never produced a reply degrades to one borderless muted row (`name · description couldn't reply: <reason>`) instead of a card. Failure rows must not carry the same visual weight as delivered replies.
+- Card status lines are text plus color (`text-foreground-subtle` with an explicit word), never a bare colored dot or a silent gap.
 
 ## Elevation and Depth
 
@@ -497,6 +503,8 @@ Desktop and wide Web workspace content uses independent conversation, bottom ter
 
 > **Upstream-only note.** The mobile remote-control feature was removed before this tree was open-sourced: there is no drawer implementation here and the narrow-remote switches are always `false`, so read that sentence as upstream design intent rather than as a description of code you can find in this repository. See [official-diff](docs/development/official-diff.md).
 
+In-conversation rosters (for example the multi-agent member panel) sit inside the conversation frame as a narrow rail on the conversation's trailing edge, separated by a `border-l` divider rather than by becoming another layout frame: they describe what is in the conversation, they are not a peer workspace surface. Such a rail is scoped to the conversation's own container query, hides before the message column gets narrow, and its collapsed state is view-local — never persisted, never treated as server truth. Hiding the rail must not remove identity from the messages themselves (avatar, name and description stay on every member card), so a collapsed or hidden rail degrades layout, not information.
+
 ## Responsive Behavior
 
 The product is desktop-first, but UI must remain functional on smaller screens.
@@ -512,7 +520,7 @@ Rules:
 ## Accessibility and Internationalization
 
 - Support keyboard navigation as a first-class interaction path.
-- Preserve visible focus behavior through the repo's established focus styling patterns.
+- Interactive controls show a visible `:focus-visible` outline; forced-colors mode uses the system highlight color. Focus must not remove the shadows of menus and dialogs.
 - Ensure contrast remains safe in light, dark, and Zai modes.
 - Write layouts that tolerate longer translations.
 - Avoid icon-only meaning when a text label is practical.
@@ -536,6 +544,7 @@ Rules:
 - support all shipped themes
 - design for desktop, web, and cross-platform rendering constraints
 - account for localization and long labels
+- express participant identity with avatar, name and description together (use the shared avatar component; fall back to an initial only as the last resort)
 
 ## Don't
 
@@ -545,4 +554,5 @@ Rules:
 - make menus and dialogs airy when they should be dense
 - use semantic error or success colors for non-semantic decoration
 - create components that only look correct in one theme
+- substitute a bare colored initial block for participant identity, or drop the name/description because the roster is hidden
 - trade clarity for visual novelty in tool-heavy screens

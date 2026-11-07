@@ -112,6 +112,11 @@ third-party/             第三方组件清单与许可快照
 ## 相关文档
 
 - [本地开发](local-setup.md) —— 环境准备与验证命令
+- [SSH 服务器工作台](177-ssh-server-workbench-plan.md) —— 窗口 Host 持有连接、终端、传输及批准；Main 仅调度 Windows RDP helper
 - [与上游的差异](upstream-diff.md) —— 本仓库相对官方 ZCode 的改动
 - [遥测与隐私](telemetry.md) —— 数据流向与保留的能力边界
 - 根目录 [AGENTS.md](../../AGENTS.md) —— 编码代理的工作规则
+
+## 主提示词状态边界
+
+提示词库由 `ISettingService` 持久化，选择 ID 由会话运行时拥有并保存为 session entry，V4 事件与快照投影供 UI 展示。串行 admission 把所选正文固定进 canonical input intent，队列和重试消费同一快照；主 Agent 构造系统上下文时追加它。运行中切换只更新选择，不改当前轮正文。远程会话从目标 Host 读取库。约束与验收见 [178-main-agent-prompts.md](178-main-agent-prompts.md)。

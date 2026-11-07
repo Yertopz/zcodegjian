@@ -44,6 +44,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  agentProfileDisplayName,
   isBuiltInExploreAgentProfile,
   normalizeAgentProfiles,
   type AgentProfile,
@@ -64,6 +65,13 @@ import {
   type RuntimeTaskRegistry,
   type RuntimeTaskSnapshot,
 } from "../runtime-task/registry.js";
+
+// 多智能体成员与一次性子智能体共用同一套执行端口，但归属不同：
+// 成员是用户组建的团队常驻身份（profile.kind === "team"），会话必须用 team_ 前缀；
+// 否则它在 session 表里就是 parent 下的 subagent_* 临时子会话，
+// 侧栏、投影和事件消费者都只能把它当子智能体显示 —— 改名文案掩盖不了这层归属。
+const TEAM_MEMBER_SESSION_PREFIX = "team_";
+const SUBAGENT_SESSION_PREFIX = "subagent_";
 
 export interface ExploreSubagentRuntimeRequest {
   agentId: string;
@@ -130,7 +138,12 @@ export interface ExploreSubagentPortOptions {
   // （stale_branch / shutdown），避免 fake-notified（issue #64）。
   enqueueParentTaskNotification?: EnqueueParentTaskNotification;
   outputRootDir?: string;
-  profiles?: readonly AgentProfile[];
+  /**
+   * 成员表单次取值数组时就是快照；传函数则每次解析现读，
+   * 因为 `CreateAgent` 会替换 `config.subagents.profiles` 这个数组本身（不是原地 push），
+   * 快照会让新成员在 `@` 路由里报 `Unknown team member`。
+   */
+  profiles?: readonly AgentProfile[] | (() => readonly AgentProfile[] | undefined);
   builtInModelSelectionOverrides?: Partial<
     Record<"general-purpose" | "Explore", import("@zcode/shared").ModelSelection>
   >;
@@ -139,6 +152,11 @@ export interface ExploreSubagentPortOptions {
   getAllowedTools?: (profile: AgentProfile) => readonly string[];
   inactivityTimeoutMs?: number;
   autoBackgroundMs?: number;
+  /**
+   * 「多智能体」开关。开启后 `SendMessage` 的目标可以写成员名（可带 `@`）：
+   * 成员已在跑就走原有投递，没在跑就在后台把它拉起来。关闭时只认 agentId。
+   */
+  multiAgent?: { enabled: boolean; mentionLimit: number };
   logger?: Logger;
 }
 
@@ -146,9 +164,19 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
   const registry = options.runtimeTaskRegistry ?? new InMemoryRuntimeTaskRegistry();
   const abortControllers = new Map<string, AbortController>();
   const borrowedForegroundAgentIds = new Set<string>();
-  const profiles = normalizeAgentProfiles(options.profiles ?? [], {
-    builtInModelSelectionOverrides: options.builtInModelSelectionOverrides,
-  });
+  // 见 `profiles` 的注释：调用方给的是现读函数时，数组换了就重新归一化，
+  // 否则沿用上一次结果（同一数组反复 tool 调用不必重复构造内置 profile）。
+  let normalizedProfiles: readonly AgentProfile[] | undefined;
+  let normalizedSource: readonly AgentProfile[] | undefined;
+  const readProfiles = (): readonly AgentProfile[] => {
+    const source = typeof options.profiles === "function" ? options.profiles() : options.profiles;
+    if (normalizedProfiles && source === normalizedSource) return normalizedProfiles;
+    normalizedSource = source;
+    normalizedProfiles = normalizeAgentProfiles(source ?? [], {
+      builtInModelSelectionOverrides: options.builtInModelSelectionOverrides,
+    });
+    return normalizedProfiles;
+  };
   const autoBackgroundMs = normalizeAutoBackgroundMs(options.autoBackgroundMs);
 
   const port: SubagentPort & { start: NonNullable<SubagentPort["start"]> } = {
@@ -156,7 +184,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
       rawRequest: SubagentLaunchRequest,
       launchOptions?: SubagentLaunchOptions,
     ): Promise<AgentOutput> {
-      const { profile, request } = resolveAgentProfileForRequest(profiles, rawRequest);
+      const { profile, request } = resolveAgentProfileForRequest(readProfiles(), rawRequest);
       const executionRequest = toSubagentExecutionRequest(request);
       const backgroundRequested =
         rawRequest.runInBackground === true || profile.background === true;
@@ -188,7 +216,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
       rawRequest: SubagentRunRequest,
       runOptions?: SubagentRunOptions,
     ): Promise<AgentOutput> {
-      const { profile, request } = resolveAgentProfileForRequest(profiles, rawRequest);
+      const { profile, request } = resolveAgentProfileForRequest(readProfiles(), rawRequest);
       const lifecycle = createSubagentLifecycle(options, request, profile);
       const startedAt = new Date(lifecycle.startedAt);
 
@@ -254,6 +282,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
               {
                 agentId: lifecycle.agentId,
                 agentType: request.agentType,
+                agentKind: profile.kind,
                 childSessionId: lifecycle.childSessionId,
                 description: request.description,
                 prompt: request.prompt,
@@ -454,7 +483,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
       rawRequest: SubagentStartRequest,
       startOptions?: SubagentStartOptions,
     ): Promise<AgentBackgroundedOutput> {
-      const { profile, request } = resolveAgentProfileForRequest(profiles, rawRequest);
+      const { profile, request } = resolveAgentProfileForRequest(readProfiles(), rawRequest);
       const lifecycle = createSubagentLifecycle(options, request, profile);
       const startedAt = new Date(lifecycle.startedAt);
       const output = createAgentBackgroundedOutput(request, lifecycle);
@@ -500,6 +529,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
               {
                 agentId: lifecycle.agentId,
                 agentType: request.agentType,
+                agentKind: profile.kind,
                 background: true,
                 childSessionId: lifecycle.childSessionId,
                 description: request.description,
@@ -585,11 +615,22 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
     ): Promise<SubagentSendMessageResult> {
       return sendMessageToLocalAgent(
         options,
-        profiles,
+        readProfiles(),
         registry,
         abortControllers,
         request,
         sendOptions,
+        (profile) => port.start({
+          sessionId: request.sessionId,
+          turnId: request.turnId,
+          parentToolCallId: request.parentToolCallId,
+          agentType: profile.name,
+          description: request.summary,
+          prompt: request.message,
+          workingDirectory: request.workingDirectory,
+          workspaceRoot: request.workspaceRoot,
+          trace: request.trace,
+        }),
       );
     },
   };
@@ -817,7 +858,9 @@ function createSubagentLifecycle(
   profile: AgentProfile,
 ): SubagentLifecycle {
   const agentId = options.createAgentId?.() ?? `agent_${crypto.randomUUID()}`;
-  const childSessionId = createSessionId(`subagent_${agentId}`);
+  const sessionPrefix =
+    profile.kind === "team" ? TEAM_MEMBER_SESSION_PREFIX : SUBAGENT_SESSION_PREFIX;
+  const childSessionId = createSessionId(`${sessionPrefix}${agentId}`);
   const startedAt = Date.now();
   const agentOutputDir = join(
     options.outputRootDir ?? join(tmpdir(), "zcode-agents"),
@@ -911,6 +954,9 @@ function createSubagentLifecycleFromTask(
   };
 }
 
+/** 后台拉起一个还没启动的团队成员；返回它注册后的身份。 */
+type LaunchTeamMember = (profile: AgentProfile) => Promise<AgentOutput>;
+
 async function sendMessageToLocalAgent(
   options: ExploreSubagentPortOptions,
   profiles: readonly AgentProfile[],
@@ -918,33 +964,82 @@ async function sendMessageToLocalAgent(
   abortControllers: Map<string, AbortController>,
   request: SubagentSendMessageRequest,
   sendOptions?: SubagentSendMessageOptions,
+  launchTeamMember?: LaunchTeamMember,
 ): Promise<SubagentSendMessageResult> {
   if (sendOptions?.signal?.aborted) {
     return createSendMessageFailure(request, `SendMessage was aborted for ${request.to}.`);
   }
 
   const task = registry.get(request.to);
-  if (!task || task.type !== "local_agent") {
-    return createSendMessageFailure(
+  if (task && task.type === "local_agent") {
+    const message = createRuntimeTaskPendingMessage(request);
+    if (!isTerminalRuntimeTask(task)) {
+      return deliverMessageToRunningAgent(registry, task, message);
+    }
+    return resumeTerminalAgentInBackground(
+      options,
+      profiles,
+      registry,
+      abortControllers,
+      task,
       request,
-      `No active local_agent task found for target ${request.to}.`,
+      message,
     );
   }
 
-  const message = createRuntimeTaskPendingMessage(request);
-  if (!isTerminalRuntimeTask(task)) {
-    return deliverMessageToRunningAgent(registry, task, message);
+  // 团队模式下 `to` 可以是成员名：先查已在跑的 task（上面），再按名字在后台拉起。
+  if (options.multiAgent?.enabled === true && launchTeamMember) {
+    return routeTeamMention(profiles, request, launchTeamMember);
   }
 
-  return resumeTerminalAgentInBackground(
-    options,
-    profiles,
-    registry,
-    abortControllers,
-    task,
+  return createSendMessageFailure(
     request,
-    message,
+    `No active local_agent task found for target ${request.to}.`,
   );
+}
+
+/**
+ * 「多智能体」按名字路由：`@reviewer` / `reviewer` 都解析到同名成员。
+ * 没有成员可拉起时明确报错，绝不静默退回 `Agent`——那会让模型以为消息已发出。
+ */
+async function routeTeamMention(
+  profiles: readonly AgentProfile[],
+  request: SubagentSendMessageRequest,
+  launchTeamMember: LaunchTeamMember,
+): Promise<SubagentSendMessageResult> {
+  const members = profiles.filter((profile) => !isBuiltInExploreAgentProfile(profile));
+  if (members.length === 0) {
+    return createSendMessageFailure(
+      request,
+      "No team member is enabled. Enable agents in Settings → Multi-agent before @-mentioning them.",
+    );
+  }
+  const name = normalizeMentionTarget(request.to);
+  const profile = members.find((candidate) =>
+    candidate.name.toLowerCase() === name || agentProfileDisplayName(candidate).toLowerCase() === name,
+  );
+  if (!profile) {
+    const available = members.map((candidate) => candidate.name).join(", ");
+    return createSendMessageFailure(
+      request,
+      `Unknown team member "${request.to}". Available members: ${available}.`,
+    );
+  }
+  const output = await launchTeamMember(profile);
+  const agentId = output.agentId;
+  return {
+    status: "success",
+    messageId: `msg_${agentId}`,
+    delivery: "launched",
+    agentId,
+    ...(output.status === "async_launched" ? { taskId: output.backgroundTaskId } : {}),
+    message: `Started team member ${agentId} (${profile.name}) in the background with this message.`,
+  };
+}
+
+/** `@reviewer` 与 `reviewer` 等价；大小写不敏感由调用方处理。 */
+function normalizeMentionTarget(target: string): string {
+  return target.trim().replace(/^@+/, "").trim();
 }
 
 async function deliverMessageToRunningAgent(
@@ -1043,6 +1138,7 @@ async function resumeTerminalAgentInBackground(
           {
             agentId: lifecycle.agentId,
             agentType: resumeRequest.agentType,
+            agentKind: lifecycle.profile.kind,
             background: true,
             childSessionId: lifecycle.childSessionId,
             description: resumeRequest.description,

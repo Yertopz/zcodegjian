@@ -6,6 +6,7 @@ import {
 } from "@zcode/shared";
 import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
+import { Badge } from "@/components/ui/badge.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { runUserAction } from "@/lib/userActionTelemetry.js";
 
@@ -49,7 +50,8 @@ function ConversationHeaderImpl({ title, onClosePane, workspaceBadge }: Conversa
           className="pointer-events-none absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] items-center gap-1"
         >
           {workspaceBadge ? (
-            <span
+            <Badge
+              variant="outline"
               data-testid={TID_V4_PANE_WORKSPACE_BADGE}
               data-remote={workspaceBadge.remote ? "true" : "false"}
               title={workspaceBadge.workspacePath}
@@ -59,7 +61,7 @@ function ConversationHeaderImpl({ title, onClosePane, workspaceBadge }: Conversa
               {workspaceBadge.remote ? (
                 <span className="shrink-0">{intl.formatMessage({ id: "v4Pane.remote" })}</span>
               ) : null}
-            </span>
+            </Badge>
           ) : null}
           {/* 产品侧暂时下线 pane chrome 拆分入口；保留回调接口与底层能力，便于后续恢复。*/}
           {/* {onSplitRight ? (

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- host process 统一处理 main↔host 生命周期、日志、ZCode Agent，拆分前先保持跨进程消息收口。 */
 import { bindDatabaseStartupRelay } from "./databaseStartupRelay.js";
 import { randomUUID } from "node:crypto";
+import { executeServerDesktop } from "./serverRdp.js";
 import { join } from "node:path";
 import {
   app,
@@ -275,6 +276,22 @@ export function spawnHostProcess(
   child.on("message", (message: unknown) => {
     const result = hostResponseMessageSchema.safeParse(message);
     if (!result.success) {
+      return;
+    }
+    if (result.data.type === HostResponseTypes.ServerDesktopRequest) {
+      const { requestId, request } = result.data;
+      void executeServerDesktop(win, request)
+        .catch((error: unknown) => ({
+          ok: false,
+          error: error instanceof Error ? error.message : "远程桌面失败",
+        }))
+        .then((response) => {
+          child.postMessage({
+            type: HostMessageTypes.ServerDesktopResult,
+            requestId,
+            result: response,
+          });
+        });
       return;
     }
 

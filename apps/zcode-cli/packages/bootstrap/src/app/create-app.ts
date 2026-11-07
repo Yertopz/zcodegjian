@@ -264,6 +264,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
           zcodeSubagentProfileOutcome.builtInModelSelectionOverrides,
         subagentOutputRootDir: join(cliStorageRoot, "agents"),
         subagentProfiles,
+        multiAgent: zcodeSubagentProfileOutcome.multiAgent,
+        userAgentsDir: zcodeSubagentProfileOutcome.userAgentsDir,
         storageRoot,
         workingDirectory,
         workspaceIdentity: options.runtimeConfig?.memory?.workspaceIdentity,

@@ -87,6 +87,13 @@ export interface V4CommandCoreHost {
   /** 会话查找（同一注册表对象引用；不存在返回 undefined → handler 拒绝）。 */
   getRecord(sessionId: string): V4SessionRecordView | undefined;
   logger?: V4CommandLogger;
+  resolveMainAgentPrompt?(
+    sessionId: string,
+    envelope?: CommandEnvelope,
+  ): Promise<import("@zcode/shared").MainAgentPromptSnapshot>;
+  readMainAgentPromptLibrary?(
+    sessionId: string,
+  ): Promise<import("@zcode/shared").MainAgentPromptLibrary | undefined>;
 
   // ── v4 原生能力（非过渡钩子）────────────────────────────────
   /** queue 项完整权威 intent；sendQueuedNow 禁止退化成 text-only 重发。 */

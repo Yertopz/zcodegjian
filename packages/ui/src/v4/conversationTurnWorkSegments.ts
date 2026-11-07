@@ -143,6 +143,11 @@ export function buildConversationTurnWorkSegments(options: {
   forceOpenHistory: boolean;
   timelineOnly: boolean;
   nowMs?: number;
+  /**
+   * 必须常显的工作行（群聊成员回复卡）。见 BuildConversationTurnRenderUnitsOptions
+   * .visibleWorkRowIds：这些行不进 assistantHistory，避免被「已工作」折叠吞掉。
+   */
+  visibleWorkRowIds?: ReadonlySet<number>;
 }): ConversationTurnWorkSegment[] {
   const visualDrafts = splitVisualWorkSegments(options.orderedRows);
   const tailRowIds = new Set(options.assistantTailRows.map((row) => row.rowId));
@@ -164,11 +169,18 @@ export function buildConversationTurnWorkSegments(options: {
     const visibleAssistantIndex = visibleAssistantTextRow
       ? segmentFlowRows.findIndex((row) => row.rowId === visibleAssistantTextRow.rowId)
       : -1;
+    // 群聊成员回复卡是对话内容而不是过程记录：它们排在最终正文之前，若按历史规则
+    // 归入 assistantHistory 就会被「已工作 N 秒」折叠收起，用户只看得到主智能体的转述。
+    // 这里把宿主点名的行从历史集合里摘掉，交给常显的 assistantWork 流原位渲染。
+    const keepVisibleRowIds = options.visibleWorkRowIds;
+    const isHistoryRow = (row: AssistantWorkRow): boolean =>
+      !keepVisibleRowIds || !keepVisibleRowIds.has(row.rowId);
     const segmentHistoryRows = options.timelineOnly
       ? []
-      : visibleAssistantIndex < 0
-        ? segmentFlowRows
-        : segmentFlowRows.slice(0, visibleAssistantIndex);
+      : (visibleAssistantIndex < 0
+          ? segmentFlowRows
+          : segmentFlowRows.slice(0, visibleAssistantIndex)
+        ).filter(isHistoryRow);
     const segmentFollowingRows =
       visibleAssistantIndex < 0 ? [] : segmentFlowRows.slice(visibleAssistantIndex + 1);
     const segmentRunning = segmentIndex === visualDrafts.length - 1 && options.isRunning;

@@ -12,6 +12,7 @@ export type {
   ActiveTurnInfo,
   AgentRuntimeConfig,
   AgentRuntimeDeps,
+  AgentRuntimeMultiAgentSettings,
   ConversationRewindResult,
   ExecuteTurnOptions,
   ModelExecutionContext,

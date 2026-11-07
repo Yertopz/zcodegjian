@@ -5,6 +5,7 @@ import { forkEditRetryHandlers } from "./fork-edit-retry.js";
 import { fileRewindHandlers } from "./file-rewind.js";
 import { goalCompactHandlers } from "./goal-compact.js";
 import { interactionBackgroundHandlers } from "./interaction-background.js";
+import { mainAgentPromptHandlers } from "./main-agent-prompt.js";
 import { modelConfigHandlers } from "./model-config.js";
 import { queueHandlers } from "./queue.js";
 import { sessionFlowHandlers } from "./session-flow.js";
@@ -19,6 +20,7 @@ export const NATIVE_HANDLERS = {
   ...selectionSideSessionHandlers,
   ...goalCompactHandlers,
   ...modelConfigHandlers,
+  ...mainAgentPromptHandlers,
   ...interactionBackgroundHandlers,
   ...forkEditRetryHandlers,
   ...fileRewindHandlers,

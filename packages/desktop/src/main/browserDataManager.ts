@@ -5,6 +5,7 @@ import type {
   ChromeBrowserDataImportResult,
   EmbeddedBrowserDataClearResult,
 } from "@zcode/shared";
+import { DEFAULT_BROWSER_INSTANCE_PARTITION } from "@zcode/shared";
 import {
   importChromeCookies,
   type ChromeCookieDatabaseBackup,
@@ -27,7 +28,7 @@ import {
 import type { LinuxChromePasswordStore } from "./chromeInstallationCandidates.js";
 import type { WindowsChromeAppBoundKeyReader } from "./windowsChromeAppBoundKey.js";
 
-export const EMBEDDED_BROWSER_PARTITION = "persist:zcode-embedded-browser";
+export const EMBEDDED_BROWSER_PARTITION = DEFAULT_BROWSER_INSTANCE_PARTITION;
 const CACHE_STORAGE_TYPES: Electron.ClearStorageDataOptions["storages"] = [
   "shadercache",
   "serviceworkers",
@@ -222,10 +223,10 @@ export async function clearEmbeddedBrowserData(options: {
       // 普通缓存清理不能删除承载登录态的 LocalStorage/IndexedDB。
       await targetSession.clearStorageData({ storages: CACHE_STORAGE_TYPES });
     }
-    options.logger.info("[browser-data] 内置浏览器数据清理完成", { mode: options.mode });
+    options.logger.info("[browser-data] 浏览器数据清理完成", { mode: options.mode });
     return { success: true };
   } catch {
-    options.logger.warn("[browser-data] 内置浏览器数据清理失败", { mode: options.mode });
+    options.logger.warn("[browser-data] 浏览器数据清理失败", { mode: options.mode });
     return { success: false, error: "embedded_browser_clear_failed" };
   }
 }

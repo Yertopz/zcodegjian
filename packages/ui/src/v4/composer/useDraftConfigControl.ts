@@ -97,6 +97,7 @@ interface DraftConfigControl {
   handleDraftSelectModel: (modelProvider: string, model: string) => void;
   handleDraftSelectThought: (thought: string) => void;
   handleDraftSwitchMode: (mode: string) => void;
+  handleDraftSelectMainAgentPrompt: (id: string | null) => void;
 }
 
 export function useDraftConfigControl(params: {
@@ -181,6 +182,7 @@ export function useDraftConfigControl(params: {
     : draft.modelSelection;
   const draftConfig = useMemo<Partial<SessionConfigState>>(
     () => ({
+      mainAgentPromptId: draft.mainAgentPromptId,
       mode: draft.mode,
       planEnabled: draft.planEnabled ?? false,
       modelSelection: effectiveSelection,
@@ -188,7 +190,7 @@ export function useDraftConfigControl(params: {
       model: effectiveSelection?.modelId ?? "",
       thought: effectiveSelection?.options?.reasoningLevel ?? "",
     }),
-    [draft.mode, draft.planEnabled, effectiveSelection],
+    [draft.mainAgentPromptId, draft.mode, draft.planEnabled, effectiveSelection],
   );
   const draftConfigRef = useRef(draftConfig);
   draftConfigRef.current = draftConfig;
@@ -457,6 +459,13 @@ export function useDraftConfigControl(params: {
     [updateDraftConfig],
   );
 
+  const handleDraftSelectMainAgentPrompt = useCallback(
+    (id: string | null) => {
+      updateComposerDraft((current) => ({ ...current, mainAgentPromptId: id }));
+    },
+    [updateComposerDraft],
+  );
+
   const handleDraftSwitchMode = useCallback(
     (mode: string) => {
       if (mode === "plan" || mode === "plan-off") {
@@ -493,6 +502,7 @@ export function useDraftConfigControl(params: {
     handleDraftSelectModel,
     handleDraftSelectThought,
     handleDraftSwitchMode,
+    handleDraftSelectMainAgentPrompt,
   };
 }
 

@@ -10,7 +10,7 @@ export const SendMessageInputSchema = z
       .string()
       .min(1)
       .max(200)
-      .describe("Recipient: local agent ID returned by Agent (format agent_<uuid>)."),
+      .describe("Recipient: local agent ID (agent_<uuid>); a child can also use an unambiguous running peer's name."),
     summary: z
       .string()
       .min(1)
@@ -33,11 +33,17 @@ export const SendMessageOutputSchema = z
     status: z.enum(["success", "failed"]),
     messageId: z.string(),
     agentId: z.string().optional(),
-    delivery: z.enum(["queued", "steered", "resumed_background"]).optional(),
+    delivery: z.enum(["queued", "steered", "resumed_background", "launched"]).optional(),
     error: z.string().optional(),
     message: z.string().optional(),
     outputFile: z.string().optional(),
     taskId: z.string().optional(),
+    /**
+     * 「多智能体」@ 次数：发出后还剩几次、设置页配的上限是多少。
+     * 只有团队模式下出现；非团队会话的同伴预算由 runtime 内部固定，不对外暴露。
+     */
+    mentionsRemaining: z.number().int().min(0).optional(),
+    mentionLimit: z.number().int().min(1).optional(),
   })
   .strict();
 

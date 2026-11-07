@@ -22,6 +22,7 @@ import {
   LifeBuoy,
   ShieldAlert,
   CloudDownload,
+  Users,
 } from "lucide-react";
 import { isSettingsSectionEnabled, type SettingsSectionId } from "@/lib/settingsNavigation.js";
 import type { Theme } from "@/useTheme.js";
@@ -84,9 +85,23 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     groupId: "agentCapabilities",
   },
   {
+    id: "mainAgentPrompts",
+    icon: WandSparkles,
+    titleId: "settings.mainAgentPrompts.title",
+    groupId: "agentCapabilities",
+  },
+  {
     id: "subagents",
     icon: Bot,
     titleId: "settings.subagents.title",
+    groupId: "agentCapabilities",
+  },
+  // 「多智能体」紧跟「子智能体」：前者是后者的协作模式（成员互相 @、@ 次数上限、
+  // 谁有权创建新成员），放在一起用户才能看出两者的层级关系。
+  {
+    id: "multiAgent",
+    icon: Users,
+    titleId: "settings.multiAgent.title",
     groupId: "agentCapabilities",
   },
   {

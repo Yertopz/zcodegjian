@@ -21,6 +21,18 @@ export const parseGlobalArgs = (argv: string[]) =>
       "no-browser": {
         type: "boolean",
       },
+      // 以下三个只服务 `zcode login codex`：代理、外部 Codex 凭据文件、首模型。
+      // 在全局声明是因为本仓库只有一个 parseArgs 入口；login-command 对非 codex 的
+      // 用法显式报错，不会让它们在其他命令里静默生效。
+      proxy: {
+        type: "string",
+      },
+      "auth-file": {
+        type: "string",
+      },
+      model: {
+        type: "string",
+      },
       "browser-use": {
         type: "string",
       },

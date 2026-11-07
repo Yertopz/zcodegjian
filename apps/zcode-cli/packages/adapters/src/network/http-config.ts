@@ -160,7 +160,7 @@ function readCapturedUserNoProxy(env: Record<string, string | undefined>): strin
   return normalizePathLike(captured.no_proxy) ?? normalizePathLike(captured.NO_PROXY);
 }
 
-function normalizeProxyUrl(value: string | undefined): string | undefined {
+export function normalizeProxyUrl(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;

@@ -19,6 +19,27 @@ export type {
 } from "./app/types.js";
 export * from "./auth-login.js";
 export {
+  CODEX_API_BASE_URL,
+  CODEX_PROVIDER_ID,
+  CODEX_PROVIDER_NAME,
+  readCodexCredentials,
+  readCodexModelDescriptors,
+} from "./codex-credentials.js";
+export type {
+  CodexCredentials,
+  CodexModelDescriptor,
+  CodexModelOrigin,
+  ReadCodexCredentialsInput,
+  ReadCodexModelDescriptorsInput,
+} from "./codex-credentials.js";
+export { loginCodexCli, parseCodexProxyUrl } from "./codex-login.js";
+export type {
+  CodexProxyConfig,
+  CodexProxyType,
+  LoginCodexCliOptions,
+  LoginCodexCliResult,
+} from "./codex-login.js";
+export {
   inspectZCodeCustomCommand,
   listZCodeCustomCommands,
   loadZCodeCustomCommand,

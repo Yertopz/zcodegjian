@@ -3,6 +3,8 @@
 远程工作区让 Agent 跑在**你自己的远端主机**上：本机只做客户端，远端跑 `zcode-server` 与 agent，
 文件操作、命令执行、Git 都在远端进行。本文是**使用与自部署指南**——从"默认能不能用"到"怎么改成自己的发布点"。
 
+桌面开发版还有独立的 [SSH 服务工作台](177-ssh-server-workbench-plan.md)，用于直接连接 Windows/Linux 终端、SFTP 与 Windows RDP，AI 操作逐次批准。该入口不部署远端 Agent，与本文的远程工作区运行时及 POSIX 限制分别管理。
+
 > 维护者/运维视角（桶、缓存策略、上传脚本、CI 自动发布）见 [remote-assets-cdn.md](../operations/remote-assets-cdn.md)。
 
 ---
