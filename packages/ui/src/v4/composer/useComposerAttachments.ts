@@ -387,6 +387,7 @@ export function useComposerAttachments(
               }));
             },
           },
+          item.file,
         );
         if (!ref) throw new Error("附件缺少可读取内容");
         if (controllersRef.current.get(controllerKey) !== controller) return;

@@ -1,7 +1,16 @@
 # 持续集成与发布构建
 
-本仓库用 GitHub Actions 承担三件事：日常校验（`ci.yml`）、发布打包（`release.yml`）、
-跨平台实测（`cross-platform.yml`）。三者都在 `.github/workflows/` 下，无需自建 runner。
+本地检出的 GitHub Actions 入口包括日常校验（`ci.yml`）、发布打包（`release.yml`）和独立 Windows 安装包构建（`build-win.yml`），无需自建 runner。各仓库默认分支上的入口以实际 `.github/workflows/` 内容为准。
+
+## 用户仓库的独立 Windows 构建
+
+`build-win.yml` 从构建分支 push 或手动调度触发，使用 `windows-latest`、Node 24.14.0 和根 `packageManager` 指定的 pnpm。当前工作副本的 Windows 构建仓库为 `mine` remote 所指向的用户仓库；推送前核对归属，不把工作副本上传到上游。构建前按根 AGENTS 执行本地检查并如实记录失败；独立打包不代替 CI 校验结果，也不作为打 tag 发布的依据。
+
+构建设置 `ZCODE_ENV=production`、`ZCODE_PREVIEW_IDENTITY=0`，且必须传 `--publish never`。此入口只生成 Windows x64 NSIS 安装包并上传 Actions artifact；不触发上游 Release 或修改默认分支。输出版本来自根 `package.json`，上传前校验同版本 `.exe`、`.blockmap`、`latest.yml`，并核对解包应用的 `ProductName=ZCode-CE` 和 `CompanyName=ZCode`。最终安装包的 SHA256、大小、源码提交及签名状态写入构建结果 JSON 和 Actions 摘要。缺文件、版本/资源不符或上传失败均应使任务失败，不能用警告或继续执行掩盖交付失败。
+
+`bundle:desktop` 接收 `--publish <never|always|onTag|onTagOrDraft>` 和等号形式，严格校验后将原值传给最终 electron-builder；未指定时保留现有发布默认值。缺失值或未知策略必须在准备资产前拒绝。云端提交前用 `--dry-run --os win --arch x64 --publish never` 核对最终命令，回归覆盖禁止发布的参数转发、默认行为及非法策略；不能只确认工作流 YAML 能解析。
+
+当前源码中 IDE 等未提交改动必须作为一致快照进入构建分支，不能只提交性能 helper 而漏掉其依赖。日志、本地用户数据和 `.local/` 不进入源码快照；使用临时 Git index 时不改动用户现有暂存区，临时 index 在提交完成后清理。安装包从该次 run 的 `zcode-ce-windows` artifact 获取；它包含安装包、差分文件、更新清单及 `build-result.json`。
 
 ## 平台构建环境
 

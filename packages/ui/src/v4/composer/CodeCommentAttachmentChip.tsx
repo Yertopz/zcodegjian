@@ -33,6 +33,7 @@ export function CodeCommentAttachmentChip({
 
   return (
     <ContextAttachmentPill
+      triggerProps={{ "data-testid": "code-comment-attachment" }}
       contentAlign={contentAlign}
       icon={<MessageSquareTextIcon className="size-4 shrink-0 text-foreground-subtle" />}
       label={label}
@@ -60,6 +61,14 @@ export function CodeCommentAttachmentChip({
               <div className="truncate font-mono text-ui-base text-foreground-subtlest">
                 {comment.sourcePath ?? comment.sourceTitle}
               </div>
+              {comment.hasUnsavedChanges ? (
+                <div className="text-ui-sm text-foreground-subtle">
+                  {intl.formatMessage({ id: "ideMode.unsavedIndicator" })}
+                </div>
+              ) : null}
+              <pre className="max-h-40 overflow-auto whitespace-pre font-mono text-ui-sm">
+                {comment.selectedText}
+              </pre>
               {comment.comment.trim() ? (
                 <div className="line-clamp-2 text-ui-base/relaxed text-foreground-subtle">
                   {comment.comment}

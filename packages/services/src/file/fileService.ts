@@ -15,6 +15,12 @@ import { packWorkspaceFileEntries } from "@zcode/shared/workspaceFileEntriesCode
 import type { IFileService, WorkspaceFileSearchParams } from "./file.js";
 import { WORKSPACE_FILE_SEARCH_DISPLAY_CAP } from "@zcode/shared/workspaceFileSearch";
 import { buildHostFileSearchCandidates, searchHostFileCandidates } from "./workspaceFileSearch.js";
+import { createWorkspaceTextSearch } from "./workspaceTextSearch.js";
+import {
+  MAX_EDIT_TEXT_BYTES,
+  readTextFileForEdit,
+  writeEditableTextFile,
+} from "./textFileEditing.js";
 import {
   defaultWorkspaceFileSearchFilter,
   type WorkspaceFileSearchFilter,
@@ -30,7 +36,7 @@ import {
 import { createServiceLogger } from "../logger/serviceLogger.js";
 import { getConversationWorkspaceDir } from "../paths.js";
 const DEFAULT_TEXT_READ_BYTES = 128 * 1024;
-const MAX_TEXT_READ_BYTES = 256 * 1024;
+const MAX_TEXT_READ_BYTES = MAX_EDIT_TEXT_BYTES;
 const DEFAULT_MEDIA_PREVIEW_BYTES = 4 * 1024 * 1024;
 const MAX_MEDIA_PREVIEW_BYTES = 8 * 1024 * 1024;
 const DEFAULT_BINARY_READ_BYTES = 256 * 1024;
@@ -327,7 +333,12 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
               { ignoreRulesActive: true },
             );
             if (decision.include) {
-              entries.push({ name: entry.name, path: entryPath, relativePath, type });
+              entries.push({
+                name: entry.name,
+                path: entryPath,
+                relativePath,
+                type,
+              });
             }
             if (type === "directory" && !entry.isSymbolicLink() && decision.traverse) {
               pendingDirectories.push(entryPath);
@@ -347,7 +358,10 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
       const packed = packWorkspaceFileEntries(sorted);
       return { at: Date.now(), signature: cacheSignature, packed };
     })();
-    workspaceFileListScanning.set(workspaceKey, { signature: cacheSignature, promise: scanning });
+    workspaceFileListScanning.set(workspaceKey, {
+      signature: cacheSignature,
+      promise: scanning,
+    });
     try {
       const index = await scanning;
       // 显式刷新/规则变化可替换在途扫描，旧扫描完成时只服务旧请求，不覆盖新索引。
@@ -368,6 +382,17 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
   };
 
   return {
+    ...createWorkspaceTextSearch(async (params) => {
+      // 连续搜索共享正在刷新的索引；没有在途扫描时才强制刷新，避免旧缓存漏掉新文件。
+      const key = params.workspaceIdentity?.trim() || params.rootPath;
+      return (
+        await ensureWorkspaceFileIndex(
+          params.rootPath,
+          params.workspaceIdentity,
+          !workspaceFileListScanning.has(key),
+        )
+      ).packed;
+    }),
     async readdir(params: { path: string; includeHidden?: boolean }): Promise<FileEntry[]> {
       const entries = await readdir(params.path, { withFileTypes: true });
       const visibleEntries = await Promise.all(
@@ -519,6 +544,8 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
         await handle.close();
       }
     },
+    readTextFileForEdit,
+    writeTextFile: writeEditableTextFile,
     async readFileRange(params: {
       path: string;
       offset: number;

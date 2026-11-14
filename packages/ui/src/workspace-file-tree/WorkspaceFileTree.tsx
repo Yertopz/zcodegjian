@@ -64,10 +64,12 @@ import {
   useWorkspaceFileSearchIndex,
   useWorkspaceFileSearchResults,
 } from "@/workspace-file-tree/useWorkspaceFileSearchIndex.js";
+import { WorkspaceFileTreeList } from "@/workspace-file-tree/WorkspaceFileTreeList.js";
 import {
   WORKSPACE_FILE_TREE_MASK_OFFSET_PROPERTY,
-  WorkspaceFileTreeList,
-} from "@/workspace-file-tree/WorkspaceFileTreeList.js";
+  addWorkspaceFileTreeExpandedPaths,
+  updateWorkspaceFileTreeScrollMask,
+} from "@/workspace-file-tree/performance.js";
 import { WorkspaceFileTreeStickyFolders } from "@/workspace-file-tree/WorkspaceFileTreeStickyFolders.js";
 import {
   createWorkspaceFileTreeRowsFromSearchEntries,
@@ -294,13 +296,9 @@ export function WorkspaceFileTree({
       : ancestorDirectories;
     pendingActivePreviewRevealPathRef.current = previewPath;
     setSelectedPath(previewPath);
-    treeData.setExpandedPaths((current) => {
-      const next = new Set(current);
-      for (const directoryPath of directoryPathsToExpand) {
-        next.add(directoryPath);
-      }
-      return next;
-    });
+    treeData.setExpandedPaths((current) =>
+      addWorkspaceFileTreeExpandedPaths(current, directoryPathsToExpand),
+    );
     void (async () => {
       for (const [index, directoryPath] of directoryPathsToExpand.entries()) {
         if (disposed) {
@@ -364,15 +362,12 @@ export function WorkspaceFileTree({
     const updateScrollMask = () => {
       // virtualizer 的 scrollOffset 需要经过 React 重渲染，拖拽滚动条时
       // mask 会落后一帧。原生 scroll 回调直接更新 CSS 变量，与浏览器滚动同步绘制。
-      listRef.current?.style.setProperty(
-        WORKSPACE_FILE_TREE_MASK_OFFSET_PROPERTY,
-        `${scrollNode.scrollTop}px`,
+      const { hasOverflow, showBottomMask } = updateWorkspaceFileTreeScrollMask(
+        scrollNode,
+        listRef.current?.style,
       );
-      const hasOverflow = scrollNode.scrollHeight > scrollNode.clientHeight + 1;
-      const isAtBottom =
-        scrollNode.scrollTop + scrollNode.clientHeight >= scrollNode.scrollHeight - 1;
       setHasScrollableFileTree(hasOverflow);
-      setShowScrollBottomMask(hasOverflow && !isAtBottom);
+      setShowScrollBottomMask(showBottomMask);
     };
 
     // RAF-based debounce to coalesce resize events
@@ -488,7 +483,7 @@ export function WorkspaceFileTree({
         );
       }
     },
-    [treeData, workspacePath],
+    [treeData.setExpandedPaths, treeData.loadDirectory, workspacePath],
   );
   const handleRevealSearchDirectory = useCallback(
     (row: WorkspaceFileTreeRow) => {
@@ -504,13 +499,9 @@ export function WorkspaceFileTree({
       }
       pendingSearchDirectoryRevealPathRef.current = row.path;
       setSelectedPath(row.path);
-      treeData.setExpandedPaths((current) => {
-        const next = new Set(current);
-        for (const directoryPath of directoryPathsToExpand) {
-          next.add(directoryPath);
-        }
-        return next;
-      });
+      treeData.setExpandedPaths((current) =>
+        addWorkspaceFileTreeExpandedPaths(current, directoryPathsToExpand),
+      );
       // 搜索结果是 listWorkspaceFiles 的平铺索引，不受 expandedPaths 驱动。
       // 目录点击必须先回到树态，再逐级加载祖先目录，目标目录才会在懒加载树中可见并保持展开。
       setFileSearchQuery("");
@@ -523,7 +514,7 @@ export function WorkspaceFileTree({
         }
       })();
     },
-    [treeData, workspacePath],
+    [treeData.setExpandedPaths, treeData.loadDirectory, workspacePath],
   );
   const handleDirectoryAction = useCallback(
     (row: WorkspaceFileTreeRow) => {

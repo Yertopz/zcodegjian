@@ -1,10 +1,7 @@
 import { createMainAgentPromptResolver } from "../zcode-protocol-v4/main-agent-prompts.js";
 import { requestSessionRuntimePreferences } from "./server-operations.js";
 import { readBackgroundBashOutputFromOwner } from "./background-work-owner.js";
-import {
-  normalizeStoredTitleSource,
-  reconcileStoredSessions,
-} from "./sessions-index-reconcile.js";
+import { normalizeStoredTitleSource, reconcileStoredSessions } from "./sessions-index-reconcile.js";
 // v4 网关 binder。
 // 定位：ConversationV4Gateway 是域无关的通道运行时，本文件把它绑到协议服务器上下文：
 // - 帧出口 = context.notify（stdio NDJSON notification，与旧 session/event 同一条管道并存）；
@@ -262,6 +259,7 @@ interface InputCommandForAdmission {
   text: string;
   attachments: readonly AttachmentRef[];
   mainAgentPrompt?: ConversationInputIntent["mainAgentPrompt"];
+  ideContext?: import("@zcode/shared").IdeContext;
   sharedContextRefs?: ConversationInputIntent["sharedContextRefs"];
   requestedDelivery?: ConversationInputIntent["delivery"]["requested"];
   admittedDelivery?: ConversationInputIntent["delivery"]["admitted"];
@@ -309,13 +307,18 @@ function resolveInputCommandForAdmission(
   if (envelope.type === "createSession") {
     const firstInput = (
       envelope.payload as {
-        firstInput?: { text: string; attachments?: AttachmentRef[] };
+        firstInput?: {
+          text: string;
+          attachments?: AttachmentRef[];
+          ideContext?: import("@zcode/shared").IdeContext;
+        };
       }
     ).firstInput;
     return firstInput
       ? {
           kind: "sendText",
           text: firstInput.text,
+          ideContext: firstInput.ideContext,
           attachments: firstInput.attachments ?? [],
         }
       : null;
@@ -339,10 +342,18 @@ function resolveInputCommandForAdmission(
       text: string;
       attachments?: AttachmentRef[];
       context_refs?: ConversationInputIntent["sharedContextRefs"];
+      ideContext?: ConversationInputIntent["ideContext"];
+      requestedDelivery?: "guide" | "queue" | "startNow";
     };
     return {
       kind: envelope.type,
       text: payload.text,
+      ideContext: payload.ideContext,
+      ...(payload.ideContext &&
+      envelope.type === "sendText" &&
+      payload.requestedDelivery !== "startNow"
+        ? { requestedDelivery: "queue" as const }
+        : {}),
       attachments: payload.attachments ?? [],
       ...(payload.context_refs ? { sharedContextRefs: payload.context_refs } : {}),
     };
@@ -367,6 +378,7 @@ function resolveInputCommandForAdmission(
   return {
     kind: canonical.intent.kind,
     mainAgentPrompt: canonical.intent.mainAgentPrompt ?? null,
+    ideContext: canonical.intent.ideContext,
     text:
       envelope.type === "editUserQuery"
         ? (payload.newText ?? canonical.intent.text)
@@ -782,6 +794,7 @@ export function createConversationV4Gateway(
         clientId: envelope.clientId || "cli",
         kind,
         text: input.text ?? "",
+        ideContext: input.ideContext,
         mainAgentPrompt:
           input.mainAgentPrompt !== undefined
             ? input.mainAgentPrompt
@@ -816,6 +829,7 @@ export function createConversationV4Gateway(
             clientId: conversationInputIntent.clientId,
             kind: conversationInputIntent.kind,
             mainAgentPrompt: conversationInputIntent.mainAgentPrompt,
+            ideContext: conversationInputIntent.ideContext,
             admissionSeq: admission.admissionSeq,
             admittedAt: admission.admittedAt,
             requestedDelivery: conversationInputIntent.delivery.requested,

@@ -388,6 +388,7 @@ export type MessageResponseProps = {
 
 export interface MessageFileLinkTarget {
   path: string;
+  startLine?: number;
   label: string;
   /** 仅用于显式尾随斜杠的目录展示提示；打开第三方应用前必须重新 stat。 */
   pathKind?: NonNullable<OpenInEditorOptions["pathKind"]>;
@@ -945,6 +946,9 @@ export function buildMessageFileLinkTarget(input: {
     : undefined;
   return {
     path: input.path,
+    ...(parseMarkdownFileLinkTarget(input.href).lineNumber
+      ? { startLine: parseMarkdownFileLinkTarget(input.href).lineNumber! }
+      : {}),
     label: input.label,
     pathKind,
     relativePath: input.workspacePath
@@ -1095,6 +1099,7 @@ const MessageFileLinkButton = forwardRef<HTMLButtonElement, MessageFileLinkButto
         ref={ref}
         type="button"
         className={cn(messageFileLinkClassName, "cursor-pointer", className)}
+        data-testid="message-file-link"
         title={fileLink.path}
         onClick={onOpen}
         {...props}
@@ -1468,6 +1473,7 @@ export const MessageResponse = memo(
                     type: "file",
                     title: getPathLeaf(fileLink.path),
                     path: fileLink.path,
+                    ...(fileLink.lineNumber ? { startLine: fileLink.lineNumber } : {}),
                     workspacePath,
                     workspaceIdentity,
                     workspaceRemoteSessionId,

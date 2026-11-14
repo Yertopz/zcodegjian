@@ -404,6 +404,8 @@ export function registerDeepLinkProtocol(
   options: { iconPath?: string } = {},
 ) {
   const scheme = "zcode";
+  // E2E 使用独立数据目录，也必须避免把临时启动命令写入系统协议注册。
+  if (process.env.ZCODE_E2E_RUN_ID?.trim()) return;
 
   if (process.defaultApp && process.argv.length >= 2) {
     const entry = resolve(process.argv[1]!);

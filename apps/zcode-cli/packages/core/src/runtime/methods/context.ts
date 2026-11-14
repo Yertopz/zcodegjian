@@ -136,6 +136,7 @@ export function createContextBuilderFromSnapshot(
     skillMetadataBudget: this.config.skillMetadataBudget,
     customSystemPrompt: this.config.systemPrompt,
     mainAgentPrompt: this.config.mainAgentPrompt,
+    ideContext: this.config.ideContext,
     workflowActor: this.config.workflowActor,
     language: this.config.language,
     outputStyle: this.config.outputStyle,

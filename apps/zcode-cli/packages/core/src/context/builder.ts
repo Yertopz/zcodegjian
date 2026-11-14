@@ -10,6 +10,7 @@ import type {
   ContextBuilderConfig,
   EnvInfo,
 } from "./types.js";
+import { composeIdePrompt } from "@zcode/shared";
 import type { ToolRegistry } from "../tool/registry.js";
 import { estimateTokens } from "./utils.js";
 import { buildCliPrefixSection } from "./sections/cli-prefix.js";
@@ -174,7 +175,7 @@ export class ContextBuilder {
       sections.push(buildContextManagementSection());
 
       // 仅主 Agent 追加角色要求，子 Agent/工作流身份不能继承。
-      if (!isWorkflowActor && this.config.mainAgentPrompt) {
+      if (!isWorkflowActor && !this.config.ideContext && this.config.mainAgentPrompt) {
         sections.push(
           createSection({
             name: "Main Agent Prompt",
@@ -194,11 +195,24 @@ export class ContextBuilder {
       }
     }
 
+    // 本轮 IDE 策略也适用于自定义 systemPrompt；不得让另一种上下文装配路径漏掉限制说明。
+    if (!isWorkflowActor && this.config.ideContext) {
+      sections.push(
+        createSection({
+          name: "IDE Assistant",
+          source: "main_agent_prompt",
+          injectionTarget: "system",
+          cacheHint: "dynamic",
+          content: composeIdePrompt(this.config.ideContext),
+        }),
+      );
+    }
+
     // 4. Skills appear as a meta user system-reminder, matching provider block layout.
     // guidanceToolNames 是 runtime 当下的
     // 工具表；一个 Skill 工具未注册的工作流子代理被告知「以下技能可经 Skill 工具使用」，
     // 只会让它相信自己有一个没有的工具。表缺席（测试 / 旧调用方）时保持既有行为。
-    if (this.config.skills && this.skillToolAvailable()) {
+    if (!this.config.ideContext && this.config.skills && this.skillToolAvailable()) {
       const skillsSection = buildSkillsSection({
         outcome: this.config.skills,
         metadataBudget: this.config.skillMetadataBudget,

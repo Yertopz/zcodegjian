@@ -173,7 +173,7 @@ export async function runRegularTurnLoop(
       // 会把已公告的工具重新当成首次出现（模型会收到重复名单）。
       const announcement = buildToolSearchAnnouncement({
         model: state.model,
-        mode: this.config.toolSearch?.mode,
+        mode: this.config.ideContext ? "off" : this.config.toolSearch?.mode,
         tools,
         registry: this.getToolRegistry(),
         entries: state.turnRequestState.entries,

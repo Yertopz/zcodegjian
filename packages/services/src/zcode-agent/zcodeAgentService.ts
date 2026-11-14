@@ -1,3 +1,4 @@
+import { WorkspaceTextRequests } from "./workspaceTextRequests.js";
 import { requestPluginReferenceCatalog } from "#src/zcode-agent/pluginReferenceCatalogRequest.js";
 import {
   localTtftFactsSchema,
@@ -7,6 +8,7 @@ import {
 import { MCP_APPS_SAMPLING_TRANSPORT_TIMEOUT_MS } from "@zcode/shared/mcp-apps";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
 import { randomUUID } from "node:crypto";
+import { ensureIdeContextSupport } from "./ideContextSupport.js";
 import { ensureIndependentPlanSupport } from "./independentPlanSupport.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -1152,6 +1154,7 @@ function resolveOffPeakToolSelection(
 export function createZCodeAgentService(
   options?: CreateZCodeAgentServiceOptions,
 ): IZCodeAgentService & { disposeAllAndWait(): Promise<void> } {
+  const workspaceTextRequests = new WorkspaceTextRequests();
   const processManager = new ZCodeAgentProcessManager(options);
   // Windows indicator 与 macOS producer lifecycle client 共用已校验、去重的 sideband facts。
   const cuaOperationTurnTracker =
@@ -5045,17 +5048,14 @@ export function createZCodeAgentService(
     },
 
     async generateWorkspaceText(params: ZCodeAgentGenerateWorkspaceTextParams) {
-      const client = await getClient(params);
-      // Worker 自己读取 ZCode Built-in / Personal Config；Host 只在执行前确保账号状态形成的
-      // Account Config Overlay 已同步，避免新进程先按旧套餐状态创建 Model。
-      await ensureAccountProviderConfigSynced({
-        client,
-        reason: "workspace_generate_text",
-        workspace: params,
-      });
-      const operationId = params.signal ? randomUUID() : undefined;
+      const operationId = params.operationId ?? (params.signal ? randomUUID() : undefined);
+      const handle = operationId
+        ? workspaceTextRequests.begin(resolveWorkspaceKey(params), operationId, params.signal)
+        : undefined;
+      const signal = handle?.signal;
+      let client: Awaited<ReturnType<typeof getClient>> | undefined;
       const cancel = () => {
-        if (!operationId) return;
+        if (!operationId || !client) return;
         void client
           .request(
             zcodeProtocolMethods.workspaceCancelGenerateText,
@@ -5073,8 +5073,19 @@ export function createZCodeAgentService(
             });
           });
       };
-      params.signal?.addEventListener("abort", cancel, { once: true });
+      signal?.addEventListener("abort", cancel, { once: true });
       try {
+        signal?.throwIfAborted();
+        client = await getClient(params);
+        signal?.throwIfAborted();
+        // Worker 自己读取 ZCode Built-in / Personal Config；Host 只在执行前确保账号状态形成的
+        // Account Config Overlay 已同步，避免新进程先按旧套餐状态创建 Model。
+        await ensureAccountProviderConfigSynced({
+          client,
+          reason: "workspace_generate_text",
+          workspace: params,
+        });
+        signal?.throwIfAborted();
         return await client.request(
           zcodeProtocolMethods.workspaceGenerateText,
           {
@@ -5092,13 +5103,18 @@ export function createZCodeAgentService(
           // 先于调用方自身 deadline 触发，并被 onRequestTimeout 误判 stale 杀进程。
           // 调用方显式传入 requestTimeoutMs（自身 deadline + 取消缓冲）时以其为准。
           {
-            signal: params.signal,
+            signal,
             ...(params.requestTimeoutMs ? { timeoutMs: params.requestTimeoutMs } : {}),
           },
         );
       } finally {
-        params.signal?.removeEventListener("abort", cancel);
+        signal?.removeEventListener("abort", cancel);
+        handle?.dispose();
       }
+    },
+
+    async cancelWorkspaceTextGeneration(params) {
+      return workspaceTextRequests.cancel(resolveWorkspaceKey(params), params.operationId);
     },
 
     async testModelConnectivity(params: ZCodeAgentTestModelConnectivityParams) {
@@ -5612,6 +5628,7 @@ export function createZCodeAgentService(
           binaryFrames: false,
           compression: "none" as const,
           workspaceHookReview: true,
+          ideContextV1: true,
           independentPlanState: true,
         },
         auth: {},
@@ -5754,10 +5771,14 @@ export function createZCodeAgentService(
     async sendConversationCommandV4(params: ZCodeAgentConversationCommandParams) {
       const client = await getClient(params);
       const planPayload = params.envelope.payload as {
+        ideContext?: unknown;
         planEnabled?: boolean;
         config?: { planEnabled?: boolean };
-        firstInput?: { planEnabled?: boolean };
+        firstInput?: { planEnabled?: boolean; ideContext?: unknown };
       };
+      if (planPayload.ideContext || planPayload.firstInput?.ideContext) {
+        await ensureIdeContextSupport(client);
+      }
       if (
         planPayload.planEnabled ||
         planPayload.config?.planEnabled ||

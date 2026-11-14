@@ -89,3 +89,23 @@ test("重试和队列提升保持原快照，包括 null 默认", () => {
     );
   }
 });
+
+test("IDE retry and queue promotion retain the admitted file and unsaved state", () => {
+  const ideContext = {
+    version: 1 as const,
+    activeFile: { absolutePath: "/project/original.ts", hasUnsavedChanges: true },
+  };
+  const canonical = { kind: "sendText" as const, text: "inspect", ideContext };
+  assert.deepEqual(inputIntentMetadataFromCanonical(envelope, canonical).ideContext, ideContext);
+  const queued = {
+    ...canonical,
+    sourceCommandId: "old",
+    queueItemId: "q",
+    clientId: "c",
+    attachments: [],
+    delivery: { requested: "queue", admitted: "queue" },
+    order: { admissionSeq: 1 },
+    admittedAt: 1,
+  } as QueueItem;
+  assert.deepEqual(inputIntentMetadataFromQueueItem(queued, "inspect").ideContext, ideContext);
+});

@@ -77,6 +77,20 @@ export function resolveRuntimeDynamicWorkflowToolsIncluded(config: AgentRuntimeC
   return config.dynamicWorkflowEnabled !== false;
 }
 
+/**
+ * `SendMessage` 是否只按「同伴消息」语义装配（描述里只有 running peer、不给 resume 入口）。
+ * 子运行时（taskType === "subagent_child"）拿到的是受限同伴端口，描述必须同步收窄；
+ * 主会话保留完整描述。
+ *
+ * 与上面的灰度门同理由收在这里：装配有两个入口，分支刷新那份历史上只传精简选项集，
+ * 漏掉本字段时 SendMessage 会被 provider 版描述覆盖——子运行时又看见「resume a completed
+ * agent」，即把官方那句泄漏路径提示重新塞回子代理。测试
+ * core/test/peerCollaboration.test.ts 的「刷新工具分支后仍成立」就是这条护栏。
+ */
+export function resolvePeerMessagesOnly(config: AgentRuntimeConfig): boolean {
+  return config.taskType === "subagent_child";
+}
+
 export function resolveBuiltInToolAllowlist(
   config: AgentRuntimeConfig,
 ): readonly string[] | undefined {

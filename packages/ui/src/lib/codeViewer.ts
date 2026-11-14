@@ -24,6 +24,8 @@ export { buildUnifiedDiff } from "@/lib/toolDiffPreview.js";
 
 export const FILE_VIEWER_MAX_TEXT_BYTES = 256 * 1024;
 export interface FileCodeViewerSource extends CodeViewerWorkspaceScope {
+  startLine?: number;
+  endLine?: number;
   type: "file";
   title: string;
   path: string;

@@ -25,6 +25,28 @@ rules:
     - invariant-only
     - evidence-only
 nodes:
+  - id: capability.ide-assistant
+    kind: capability
+    label: IDE file linking, workspace text search and per-turn assistant
+    aliases: [IDE 模式, IDE 助手, 添加到对话, code selection, 全局文本搜索]
+    codeSeeds:
+      - file: packages/ui/src/store/ideEditorStore.ts
+        symbol: snapshotIdeContext
+      - file: packages/ui/src/hooks/useAppPanels.ts
+        symbol: useAppPanels
+      - file: packages/shared/src/ide-context.ts
+        symbol: ideContextSchema
+      - file: packages/services/src/file/workspaceTextSearch.ts
+        symbol: createWorkspaceTextSearch
+      - file: packages/ui/src/ide-mode/ideTextSearchController.ts
+        symbol: createIdeTextSearchController
+      - file: apps/zcode-cli/packages/core/src/runtime/helpers/ide-tool-policy.ts
+        symbol: isIdeToolAllowed
+    invariants:
+      - IDE drafts are workspace-identity scoped; readonly diff snapshots never replace editable drafts.
+      - Workspace text search reads disk through scoped FileService; late results cannot cross workspace or connection changes.
+      - Submission captures ideContext once; canonical intent owns queue/retry/recovery snapshots.
+      - IDE tool exposure and execution share an allowlist intersection; ordinary prompt selection is preserved.
   - id: capability.model-selection
     kind: capability
     label: Model selection
@@ -374,6 +396,22 @@ nodes:
       - file: apps/zcode-cli/packages/core/src/runtime/methods/turn-model.ts
         symbol: applySubmissionExecutionState
 edges:
+  - from: capability.ide-assistant
+    to: state.composer-submission-intent
+    type: snapshots-at
+    rank: must-inspect
+  - from: capability.ide-assistant
+    to: service.conversation-command-inbox
+    type: admitted-by
+    rank: must-inspect
+  - from: capability.ide-assistant
+    to: service.runtime-submission-execution
+    type: restricts-per-turn
+    rank: must-inspect
+  - from: capability.ide-assistant
+    to: boundary.workspace-key
+    type: isolated-by
+    rank: invariant-only
   - from: capability.model-selection
     to: surface.conversation-model-control
     type: renders-in

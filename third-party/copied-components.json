@@ -438,7 +438,7 @@
     "importRevision": "aac4755666d09fdcd70272fcf063c077a639015f",
     "provenance": "Copied from the official open-source checkout zai-org/ZCode at revision aac47556 (tag v3.15.1, commit \"feat: update to v3.15.1\") as part of the 3.15.1-ce.1 upstream sync. Upstream declares license Apache-2.0 in package.json; the pinned LICENSE snapshot is byte-identical to the earlier ZCode entries (Apache-2.0 text unchanged since 29628c9, sha256 verified). Verified via the shared read-only worktree .local/91-upstream-checkout/zai-org-ZCode-3151 (detached @ aac47556); no re-download or re-extraction of any distribution package was performed.",
     "roots": ["packages/shared/src/zcode-protocol-v4"],
-    "scope": "The whole packages/shared/src/zcode-protocol-v4 directory as of the v3.15.1 sync: 31 pre-existing files replaced wholesale plus new files (create-session-config, workflow-command-rejections, workflow-runs-actor-session, workflow-runs-holes) and index. Content is the upstream v3.15.1 protocol drift: default-concurrency-D model (run-started records concurrencyCeiling; shared bucket may grow to 2D), ceiling vs limit two-bounds semantics, actor.model (F7 per-subagent model), actor sessionId semantics (X2), holes/extractions. 33 of the files carry the 'Modified by ZCode:' marker because comments containing markdown emphasis were de-emphasized per docs/development/copy-and-format.md §3 (copyFormatGuard ratchet); listed in modifiedFiles. packages/shared/src/zcode-protocol-v4/sessions-index.ts additionally received the upstream 3.16.2 (3c5b2276) sessionsIndexReconcile params/result schemas and V4 route constant; that addition is registered here because the file already belongs to this entry.",
+    "scope": "The whole packages/shared/src/zcode-protocol-v4 directory as of the v3.15.1 sync: 31 pre-existing files replaced wholesale plus new files (create-session-config, workflow-command-rejections, workflow-runs-actor-session, workflow-runs-holes) and index. Content is the upstream v3.15.1 protocol drift: default-concurrency-D model (run-started records concurrencyCeiling; shared bucket may grow to 2D), ceiling vs limit two-bounds semantics, actor.model (F7 per-subagent model), actor sessionId semantics (X2), holes/extractions. CE comment adaptations are recorded in modifiedFiles. command.ts, input-intent.ts and transport.ts also carry the optional per-turn IDE context and capability declaration; these are CE-authored extensions. packages/shared/src/zcode-protocol-v4/sessions-index.ts additionally received the upstream 3.16.2 (3c5b2276) sessionsIndexReconcile params/result schemas and V4 route constant; that addition is registered here because the file already belongs to this entry.",
     "license": "Apache-2.0",
     "modifiedFiles": [
       "packages/shared/src/zcode-protocol-v4/coalesce.ts",
@@ -473,7 +473,9 @@
       "packages/shared/src/zcode-protocol-v4/workflow-runs-unlisted.ts",
       "packages/shared/src/zcode-protocol-v4/workflow-runs.ts",
       "packages/shared/src/zcode-protocol-v4/workflow-workspace.ts",
-      "packages/shared/src/zcode-protocol-v4/sessions-index.ts"
+      "packages/shared/src/zcode-protocol-v4/sessions-index.ts",
+      "packages/shared/src/zcode-protocol-v4/command.ts",
+      "packages/shared/src/zcode-protocol-v4/input-intent.ts"
     ]
   },
   {
@@ -854,13 +856,14 @@
       "packages/ui/src/v4/conversationRowContext.ts",
       "packages/ui/src/v4/ConversationRowView.tsx"
     ],
-    "scope": "F2 GLM HighSpeed experience, client side only (card UI 17 files, v4/highspeed canvas 2, assets 6, plus upstream-only dependency files adopted verbatim: floating-particles, globalNoticeStore, v4 render units/panels/parser). The lottery/issuance/weighting is server-side and intentionally not copied. The second slice (ConversationTurnGroup) landed via hunk-level extraction: 18 pure-HighSpeed hunks + 9 generic + 3 mixed, separated at line level with topic/F6 fills excluded and CE's onFork kept; conversationTurnRenderUnitTypes carries the placeholder PluginUiRowPinResolver inline type (to be swapped back after F5), conversationRowContext had its F6-domain fields removed, and ConversationRowView adopted the compact-for-remote-control prop. All three carry 'Modified by ZCode:' markers; the other four v4 files in the roots list are upstream versions adopted wholesale (byte-identical). WorkflowNotificationToolRow and the locale keys are registered under 'ZCode UI adapted fragments v3.15.1'.",
+    "scope": "F2 GLM HighSpeed experience, client side only (card UI 17 files, v4/highspeed canvas 2, assets 6, plus upstream-only dependency files adopted verbatim: floating-particles, globalNoticeStore, v4 render units/panels/parser). The lottery/issuance/weighting is server-side and intentionally not copied. The second slice (ConversationTurnGroup) landed via hunk-level extraction: 18 pure-HighSpeed hunks + 9 generic + 3 mixed, separated at line level with topic/F6 fills excluded and CE's onFork kept; conversationTurnRenderUnitTypes carries the placeholder PluginUiRowPinResolver inline type (to be swapped back after F5), conversationRowContext had its F6-domain fields removed, and ConversationRowView adopted the compact-for-remote-control prop. CE adaptations are listed in modifiedFiles and carry 'Modified by ZCode:' markers. ConversationFileSummaryPanel additionally routes IDE file previews and publishes explicit file-change facts for editor refresh. WorkflowNotificationToolRow and the locale keys are registered under 'ZCode UI adapted fragments v3.15.1'.",
     "license": "Apache-2.0",
     "modifiedFiles": [
       "packages/ui/src/v4/conversationTurnRenderUnitTypes.ts",
       "packages/ui/src/v4/ConversationTurnGroup.tsx",
       "packages/ui/src/v4/conversationRowContext.ts",
-      "packages/ui/src/v4/ConversationRowView.tsx"
+      "packages/ui/src/v4/ConversationRowView.tsx",
+      "packages/ui/src/v4/ConversationFileSummaryPanel.tsx"
     ]
   },
   {
@@ -1216,7 +1219,13 @@
       "packages/ui/src/i18n/locales/en-US.ts"
     ],
     "scope": "F8 bot group/topic conversation surface: channel+sender source label, delivery receipts (confirm received / not received / resend), topic preparation projection and 'interrupted by a new group message' status. The group/topic service side and the Bot management UI were copied earlier (see the two ZCode Bot entries). Intentionally not copied: the topic-details dialog and its failed-preparation retry entry (no consumer UI yet; retryPreparation is exposed by the hook for later wiring), and ChannelMention content rendering.",
-    "license": "Apache-2.0"
+    "license": "Apache-2.0",
+    "modifiedFiles": [
+      "packages/ui/src/v4/SessionPane.tsx",
+      "packages/ui/src/v4/ConversationUserInputBubble.tsx",
+      "packages/ui/src/i18n/locales/zh-CN.ts",
+      "packages/ui/src/i18n/locales/en-US.ts"
+    ]
   },
   {
     "id": "ZCode tool search contract & core v3.16.2 (Z.ai)",

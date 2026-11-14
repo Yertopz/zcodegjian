@@ -19,6 +19,9 @@ export interface WorkspaceFileSearchParams {
 }
 
 export interface IFileService {
+  /** 当前工作区磁盘正文搜索；复用文件索引和严格文本读取，不发送 Agent 输入。 */
+  searchWorkspaceText(params: WorkspaceTextSearchParams): Promise<WorkspaceTextSearchResult>;
+  cancelWorkspaceTextSearch(params: WorkspaceTextSearchTarget): Promise<boolean>;
   /** Host 匹配并返回有界候选，避免 Renderer 下载完整文件索引。 */
   searchWorkspaceFiles(params: WorkspaceFileSearchParams): Promise<WorkspaceFileEntry[]>;
   readdir(params: { path: string; includeHidden?: boolean }): Promise<FileEntry[]>;
@@ -33,6 +36,14 @@ export interface IFileService {
   createDefaultWorkspace(): Promise<{ path: string }>;
   createScratchWorkspace(params: { name: string }): Promise<{ path: string }>;
   readTextFile(params: { path: string; offset?: number; length?: number }): Promise<FileTextSlice>;
+  /** 有界 UTF-8 编辑快照；版本必须原样用于下一次保存。 */
+  readTextFileForEdit(params: { path: string }): Promise<{ content: string; version: string }>;
+  /** 锁内比较版本并原子替换；不允许缺省版本的写入。 */
+  writeTextFile(params: {
+    path: string;
+    content: string;
+    expectedVersion: string;
+  }): Promise<{ version: string }>;
   readMediaPreview(params: { path: string; maxBytes?: number }): Promise<FileMediaPreview>;
   /**
    * 按偏移读取文件的一段原始字节，供大二进制文件（如 PDF）按需分段加载。
@@ -77,6 +88,33 @@ export interface IFileService {
     transform: "sync-gitignore" | "reset-defaults";
   }): Promise<{ content: string }>;
   writeWorkspaceFileSearchIgnore(params: { rootPath: string; content: string }): Promise<void>;
+}
+
+export interface WorkspaceTextSearchTarget {
+  rootPath: string;
+  workspaceIdentity?: string;
+  requestId: string;
+}
+export interface WorkspaceTextSearchParams extends WorkspaceTextSearchTarget {
+  query: string;
+  caseSensitive?: boolean;
+  limit?: number;
+}
+export interface WorkspaceTextSearchMatch {
+  path: string;
+  relativePath: string;
+  lineNumber: number;
+  columnNumber: number;
+  preview: string;
+  matchStart: number;
+  matchLength: number;
+}
+export interface WorkspaceTextSearchResult {
+  matches: WorkspaceTextSearchMatch[];
+  searchedFiles: number;
+  skippedFiles: number;
+  truncated: boolean;
+  cancelled: boolean;
 }
 
 export const IFileService = createServiceDescriptor<IFileService>(ServiceChannels.File);

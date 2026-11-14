@@ -58,6 +58,8 @@ export async function admitPrompt(
 
     const activeTurn = this.activeTurn;
     const canSteer =
+      !options?.intent?.ideContext &&
+      !this.config.ideContext &&
       attachments === undefined &&
       activeTurn?.steerable === true &&
       (options?.queueDelivery === "guide" ||
@@ -82,7 +84,12 @@ export async function admitPrompt(
     }
 
     const delivery =
-      options?.queueDelivery === "guide" && attachments === undefined ? "guide" : "queue";
+      !options?.intent?.ideContext &&
+      !this.config.ideContext &&
+      options?.queueDelivery === "guide" &&
+      attachments === undefined
+        ? "guide"
+        : "queue";
     return await this.enqueueDeferredInput({
       attachments,
       commandKind: options?.commandKind,

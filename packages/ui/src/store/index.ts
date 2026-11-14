@@ -44,7 +44,7 @@ import {
   normalizeInterfaceMode,
   type InterfaceMode,
 } from "@/lib/interfaceMode.js";
-import { logger } from "@/logger.js";
+import { createIdeModeGuard } from "./ideModeGuard.js";
 
 export type LoginEntryPurpose = "app-login";
 
@@ -102,7 +102,8 @@ function loadPerformanceMode(): boolean {
 export interface ZCodeState {
   /** 展示详情偏好，不改变 Agent 权限或执行能力。 */
   interfaceMode: InterfaceMode;
-  setInterfaceMode: (mode: InterfaceMode) => void;
+  previousInterfaceMode: "office" | "coding";
+  setInterfaceMode: (mode: InterfaceMode) => Promise<boolean>;
 
   /** 当前主题 */
   theme: Theme;
@@ -241,17 +242,8 @@ export function createZCodeStore(
 
   const useStore = create<ZCodeState>()((set, get) => ({
     interfaceMode: normalizeInterfaceMode(readSafeLocalStorage(INTERFACE_MODE_STORAGE_KEY)),
-    setInterfaceMode: (mode) => {
-      const interfaceMode = normalizeInterfaceMode(mode);
-      if (get().interfaceMode !== interfaceMode) {
-        logger.debug("[InterfaceMode] 切换界面模式", {
-          interfaceMode,
-          source: applyingBroadcast ? "broadcast" : "local",
-        });
-      }
-      writeSafeLocalStorage(INTERFACE_MODE_STORAGE_KEY, interfaceMode);
-      set({ interfaceMode });
-    },
+    previousInterfaceMode: "coding",
+    setInterfaceMode: (mode) => modeTransition.request(normalizeInterfaceMode(mode)),
     // 默认主题统一收敛到 Zai dark，避免首次启动时 store 与其他主题入口表现不一致。
     // 仍然优先尊重 localStorage 中已保存的用户选择，不覆盖已有偏好；
     // 非法/外来条目经 readPersistedTheme 校验后回退内置 palette（issue #2）。
@@ -434,6 +426,28 @@ export function createZCodeStore(
     };
   };
 
+  const modeTransition = createIdeModeGuard({
+    getMode: () => useStore.getState().interfaceMode,
+    getLocale: () => useStore.getState().locale,
+    commit: (interfaceMode, fromBroadcast) => {
+      const previous = useStore.getState().interfaceMode;
+      // 异步确认结束后仅在同步 commit 内抑制广播，避免吞掉等待期间的主题/语言更新。
+      const wasApplying = applyingBroadcast;
+      applyingBroadcast = fromBroadcast;
+      try {
+        writeSafeLocalStorage(INTERFACE_MODE_STORAGE_KEY, interfaceMode);
+        useStore.setState({
+          interfaceMode,
+          ...(interfaceMode === "ide" && previous !== "ide"
+            ? { previousInterfaceMode: previous }
+            : {}),
+        });
+      } finally {
+        applyingBroadcast = wasApplying;
+      }
+    },
+  });
+
   // Zustand v5 的 setState 在 replace=true/false 上使用了不同重载，
   // 之前直接包一层并透传 replace，会在严格类型下落到互不兼容的签名分支。
   // 这里改成订阅状态变化后再广播，只比较真正需要跨窗口同步的字段，逻辑更直观，也避免重载冲突。
@@ -479,9 +493,9 @@ export function createZCodeStore(
         state.setLocale(msg.payload);
       } else if (
         field === "interfaceMode" &&
-        (msg.payload === "office" || msg.payload === "coding")
+        (msg.payload === "office" || msg.payload === "coding" || msg.payload === "ide")
       ) {
-        state.setInterfaceMode(normalizeInterfaceMode(msg.payload));
+        void modeTransition.request(normalizeInterfaceMode(msg.payload), true);
       } else if (field === "uiFontSizePx" && typeof msg.payload === "number") {
         state.setUiFontSizePx(msg.payload);
       }

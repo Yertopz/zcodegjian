@@ -1,3 +1,5 @@
+// Modified by ZCode: 为 IDE 提交增加经过校验的可选每轮上下文，保留旧协议缺省行为。
+import { ideContextSchema } from "../ide-context.js";
 import { createSessionRequestedConfigSchema } from "./create-session-config.js";
 import { localTtftContextSchema, localTtftClockSchema } from "../localTtft.js";
 import { conversationQuotesSchema } from "../conversationSelection.js";
@@ -60,6 +62,7 @@ export const commandPayloadSchemas = {
     firstInput: z
       .object({
         text: z.string(),
+        ideContext: ideContextSchema.optional(),
         attachments: z.array(attachmentRefSchema).optional(),
         modelSelection: modelSelectionSchema.optional(),
         mode: submissionModeSchema.optional(),
@@ -95,6 +98,7 @@ export const commandPayloadSchemas = {
   sendText: z
     .object({
       text: z.string(),
+      ideContext: ideContextSchema.optional(),
       attachments: z.array(attachmentRefSchema).optional(),
       // Desktop Cmd/Ctrl+Enter 只覆盖本次 busy input，不改 session followupMode。
       // startNow 由 CLI 原子抢占当前 turn，不经过 queue admission。

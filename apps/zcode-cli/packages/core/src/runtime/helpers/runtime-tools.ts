@@ -1,3 +1,4 @@
+import { isIdeToolAllowed } from "./ide-tool-policy.js";
 import {
   createConfiguredHookRunner,
   createInMemoryHookRunner,
@@ -21,6 +22,7 @@ import { createRuntimeSessionModePort } from "../session-mode-port.js";
 import { shouldSuppressSealedSubagentBashNotification } from "../../runtime-task/notification-policy.js";
 import {
   resolveBuiltInToolAllowlist,
+  resolvePeerMessagesOnly,
   resolveRuntimeDisallowedTools,
   resolveRuntimeDynamicWorkflowToolsIncluded,
 } from "./tool-allowlist.js";
@@ -70,7 +72,7 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
     // agent 目录可写。团队成员与普通子运行时看到的是同一个静默缺席。
     includeCreateAgent: resolveIncludeCreateAgentTool(runtime.config),
     ...(createAgentTarget ? { createAgentTarget } : {}),
-    peerMessagesOnly: runtime.config.taskType === "subagent_child",
+    peerMessagesOnly: resolvePeerMessagesOnly(runtime.config),
     includeRespondToCoordinator:
       runtime.config.taskType === "subagent_child" && Boolean(deps.coordinatorResponsePort),
     // submit_result 只在注入了 workflowSubmitPort 的 workflow actor 会话注册。以端口存在为门，
@@ -175,6 +177,7 @@ function createRuntimeToolExecutor(
     agentTelemetry: runtime.agentTelemetry.port,
     agentTelemetryActorKind: runtime.agentTelemetry.actorKind,
     registry: runtime.registry,
+    isToolAllowed: (name) => isIdeToolAllowed(runtime.config.ideContext, name),
     permissionService: runtime.permissionService,
     permissionBroker: runtime.permissionBroker,
     emitEvent: async (event) => {

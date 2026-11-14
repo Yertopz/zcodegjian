@@ -104,6 +104,8 @@ export async function executeTurnCommand(
   const admittedOutputStyle = this.config.outputStyle;
   // admission 已冻结正文；排队后修改设置不得改写这一轮。
   this.config.mainAgentPrompt = options?.intent?.mainAgentPrompt ?? null;
+  // 只有启动独立轮次才应用快照；忙碌队列不能改变当前工具面。
+  this.config.ideContext = options?.intent?.ideContext;
   const compactInstructions = parseCompactCommand(input);
   const rewindCommand = parseRewindCommand(input);
   const turnId = startReservation?.turnId ?? createTurnId();

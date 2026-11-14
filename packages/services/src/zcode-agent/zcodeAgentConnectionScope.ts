@@ -206,6 +206,7 @@ function createHello(context: ZCodeAgentV4ConnectionContext): HelloMessage {
       binaryFrames: false,
       compression: "none",
       workspaceHookReview: true,
+      ideContextV1: true,
       independentPlanState: true,
     },
     auth: {},

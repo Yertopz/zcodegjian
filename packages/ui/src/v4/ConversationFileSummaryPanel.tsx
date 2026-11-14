@@ -1,3 +1,5 @@
+// Modified by ZCode: 文件修改事实驱动 IDE 标签刷新，差异预览通过统一入口打开。
+import { useIdeEditorStore } from "@/store/ideEditorStore.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRightIcon, Loader2Icon, Undo2Icon } from "lucide-react";
 import type {
@@ -17,7 +19,10 @@ import {
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { FileDisplayInline } from "@/lib/fileDisplay.js";
 import { toWorkspaceRelativePath } from "@/lib/taskChangeSummary.js";
-import { buildChangeSummaryFilePreviewSource } from "@/messageChangeSummaryPreview.js";
+import {
+  formatChangeSummaryPatch,
+  buildChangeSummaryFilePreviewSource,
+} from "@/messageChangeSummaryPreview.js";
 import { OpenSplitButton } from "@/OpenSplitButton.js";
 import { logger } from "@/logger.js";
 import { collectGenUiSourcePaths, matchesGenUiSourcePath } from "@/gen-ui/contract.js";
@@ -35,18 +40,6 @@ interface ConversationFileSummaryPanelProps {
   assistantText?: string;
 }
 
-function formatPatch(path: string, patches: FileChangeItem["patches"]): string {
-  if (patches.length === 0) return "";
-  const lines = [`--- a/${path}`, `+++ b/${path}`];
-  for (const patch of patches) {
-    lines.push(
-      `@@ -${patch.oldStart},${patch.oldLines} +${patch.newStart},${patch.newLines} @@`,
-      ...patch.lines,
-    );
-  }
-  return lines.join("\n");
-}
-
 function openDiff(
   item: FileChangeItem,
   context: Pick<
@@ -54,7 +47,7 @@ function openDiff(
     "workspacePath" | "workspaceIdentity" | "workspaceRemoteSessionId" | "onOpenCodeViewer"
   >,
 ) {
-  const patch = formatPatch(item.path, item.patches);
+  const patch = formatChangeSummaryPatch(item.path, item.patches);
   const { workspacePath, workspaceIdentity, workspaceRemoteSessionId, onOpenCodeViewer } = context;
   if (!patch || !onOpenCodeViewer) return;
   const relativePath = toWorkspaceRelativePath(workspacePath, item.path);
@@ -136,7 +129,12 @@ export function ConversationFileSummaryPanel({
     () => (header.entityId ? { rowId: header.rowId, entityId: header.entityId } : null),
     [header.entityId, header.rowId],
   );
-  const needsDetails = open || filtersSources;
+  const hasIdeTabs = useIdeEditorStore((state) =>
+    Boolean(
+      state.byWorkspaceKey[context.workspaceIdentity?.trim() || context.workspacePath]?.tabs.length,
+    ),
+  );
+  const needsDetails = open || filtersSources || hasIdeTabs;
 
   useEffect(() => {
     if (!needsDetails || !context.fetchFileChanges || !target) return;
@@ -155,6 +153,12 @@ export function ConversationFileSummaryPanel({
         (result) => {
           if (disposed) return;
           setLoadedDetails({ key: requestKey, result });
+          if (result)
+            useIdeEditorStore.getState().notifyFileChanges(
+              context.workspaceIdentity?.trim() || context.workspacePath,
+              result.items.map((item) => item.path),
+              { id: requestKey },
+            );
           setLoadingDetails(false);
         },
         (loadError: unknown) => {
@@ -174,6 +178,8 @@ export function ConversationFileSummaryPanel({
   }, [
     cachePolicy,
     context.fetchFileChanges,
+    context.workspaceIdentity,
+    context.workspacePath,
     fileChangesState,
     needsDetails,
     open,

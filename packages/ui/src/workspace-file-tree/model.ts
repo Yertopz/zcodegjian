@@ -257,7 +257,8 @@ export function getWorkspaceFileAncestorDirectories(
     return [];
   }
 
-  const separator = filePath.includes("\\") && !filePath.includes("/") ? "\\" : "/";
+  // 聊天链接常用 /，但目录 Map/Set 按工作区原路径建 key；混合分隔符会导致已加载目录仍不展开。
+  const separator = workspacePath.includes("\\") && !workspacePath.includes("/") ? "\\" : "/";
   const basePath = workspacePath.replace(/[\\/]+$/, "");
   const ancestorSegments = relativeSegments.slice(0, -1);
   const ancestors: string[] = [];

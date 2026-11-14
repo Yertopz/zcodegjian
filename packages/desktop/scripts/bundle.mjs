@@ -249,6 +249,7 @@ function printHelp() {
 参数:
   --os, -o <mac|win|linux>     目标操作系统，默认 mac
   --arch, -a <x64|arm64>       目标 CPU 架构，默认 arm64
+  --publish <policy>           never / always / onTag / onTagOrDraft，省略沿用打包器默认值
   --skip-prepare               跳过 prepare:runtime-assets
   --skip-build                 跳过 pnpm build
   --dry-run                    只打印最终命令，不执行打包
@@ -283,6 +284,7 @@ function parseArgs(argv) {
     skipPrepare: process.env.ZCODE_SKIP_PREPARE === "1",
     skipBuild: process.env.ZCODE_SKIP_BUILD === "1",
     dryRun: false,
+    publish: undefined,
     positionals: [],
   };
 
@@ -310,6 +312,15 @@ function parseArgs(argv) {
 
     if (arg === "--skip-build") {
       options.skipBuild = true;
+      continue;
+    }
+
+    if (arg === "--publish" || arg.startsWith("--publish=")) {
+      const policy = arg === "--publish" ? argv[++index] : arg.slice("--publish=".length);
+      if (!["never", "always", "onTag", "onTagOrDraft"].includes(policy)) {
+        throw new Error(`不支持的发布策略: ${policy ?? "缺少值"}`);
+      }
+      options.publish = policy;
       continue;
     }
 
@@ -358,6 +369,7 @@ function parseArgs(argv) {
     skipPrepare: options.skipPrepare,
     skipBuild: options.skipBuild,
     dryRun: options.dryRun,
+    publish: options.publish,
   };
 }
 
@@ -697,7 +709,7 @@ function verifyPackagedRuntimeDependencies(os, arch) {
 }
 
 async function main() {
-  const { os, arch, skipPrepare, skipBuild, dryRun } = parseArgs(process.argv.slice(2));
+  const { os, arch, skipPrepare, skipBuild, dryRun, publish } = parseArgs(process.argv.slice(2));
   const buildArgs = [
     "exec",
     "electron-builder",
@@ -706,6 +718,8 @@ async function main() {
     osBuilderFlagMap[os],
     archBuilderFlagMap[arch],
   ];
+  // 个人仓库的 CI 必须能显式禁用发布；仅解析而不转发会让 builder 继续推断发布策略。
+  if (publish !== undefined) buildArgs.push("--publish", publish);
 
   console.log(`[bundle] target=${os}/${arch}`);
   console.log(`[bundle] skipPrepare=${skipPrepare} skipBuild=${skipBuild}`);

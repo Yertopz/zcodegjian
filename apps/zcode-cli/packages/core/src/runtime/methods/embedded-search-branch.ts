@@ -4,6 +4,7 @@ import type { AgentRuntimeInternal } from "../internal.js";
 import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/capability.js";
 import {
   resolveBuiltInToolAllowlist,
+  resolvePeerMessagesOnly,
   resolveRuntimeDynamicWorkflowToolsIncluded,
 } from "../helpers/tool-allowlist.js";
 import {
@@ -56,6 +57,9 @@ export function refreshBranchAwareBuiltInTools(runtime: AgentRuntimeInternal): v
     // silentDuplicateWarnings 还把告警吞掉，所以全程无声）。推导因此必须与 runtime-tools.ts
     // 共用同一个 helper，不能在这里重写一遍判断。
     includeDynamicWorkflow: resolveRuntimeDynamicWorkflowToolsIncluded(runtime.config),
+    // 描述门与工具面同源：省略本字段会让 SendMessage 退回 provider 版描述，
+    // 子运行时的受限同伴语义（以及「不给 resume 入口」）在刷新后被静默还原。
+    peerMessagesOnly: resolvePeerMessagesOnly(runtime.config),
     agentProfiles: runtime.config.subagents?.profiles,
     allowedTools: resolveBuiltInToolAllowlist(runtime.config),
     disallowedTools: runtime.config.toolDisallowlist,

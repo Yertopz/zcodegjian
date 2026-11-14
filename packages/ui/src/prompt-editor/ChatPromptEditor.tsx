@@ -1,3 +1,5 @@
+import type { InlineAttachmentContextValue } from "./InlineAttachmentNode.js";
+import { ComposerResizeHandle } from "./ComposerResizeHandle.js";
 /* oxlint-disable eslint(max-lines) -- 输入壳同时收口 Lexical 同步、拖拽和工具栏插槽，暂不拆组件。 */
 // 输入展示壳：纯 props 组件、无 store/协议依赖；mention 面板通过 enableMentionPanel 透传。
 import type {
@@ -39,6 +41,9 @@ function runAfterFrame(callback: () => void) {
 }
 
 export function ChatPromptEditor({
+  inlineAttachments,
+  resizable = false,
+  headerAction,
   workspacePath,
   workspaceIdentity,
   taskId,
@@ -89,6 +94,9 @@ export function ChatPromptEditor({
   appSlashCommands,
   enableMentionPanel,
 }: {
+  inlineAttachments?: InlineAttachmentContextValue;
+  resizable?: boolean;
+  headerAction?: ReactNode;
   workspacePath: string;
   workspaceIdentity?: string;
   taskId: string | null;
@@ -151,6 +159,7 @@ export function ChatPromptEditor({
 }) {
   const { intl } = useZCodeIntl();
   const toolbarRef = useComposerToolbarFit();
+  const [inputHeight, setInputHeight] = useState<number | undefined>(undefined);
   const internalInputApiRef = useRef<LexicalChatInputHandle | null>(null);
   const resolvedInputApiRef = inputApiRef ?? internalInputApiRef;
   const [internalTriggerPanelContainer, setInternalTriggerPanelContainer] =
@@ -247,6 +256,10 @@ export function ChatPromptEditor({
 
   const handleDragOver: DragEventHandler<HTMLDivElement> = useCallback(
     (event) => {
+      if (Array.from(event.dataTransfer.types).includes("text/uri-list")) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }
       const hasWorkspaceFilePayload =
         enableWorkspaceFileDrop && hasWorkspaceFileDragPayload(event.dataTransfer);
       if (hasWorkspaceFilePayload) {
@@ -282,6 +295,22 @@ export function ChatPromptEditor({
 
   const handleDrop: DragEventHandler<HTMLDivElement> = useCallback(
     (event) => {
+      const uri = (
+        event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain")
+      )
+        .split(/\r?\n/)
+        .find((line) => !line.startsWith("#"))
+        ?.trim();
+      if (event.dataTransfer.files.length === 0 && uri && /^https?:\/\/\S+$/.test(uri)) {
+        // 链接始终是正文，不采集网页、也不把网页拖拽生成的 HTML 当作附件。
+        event.preventDefault();
+        event.stopPropagation();
+        resolvedInputApiRef.current?.appendText(uri);
+        setInternalDragging(false);
+        setExternalFileDragging(false);
+        setWorkspaceFileDragging(false);
+        return;
+      }
       const workspaceFilePayload = enableWorkspaceFileDrop
         ? readWorkspaceFileDragPayload(event.dataTransfer)
         : null;
@@ -340,6 +369,7 @@ export function ChatPromptEditor({
         />
       )}
       <div
+        data-composer-editor-shell
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -359,8 +389,24 @@ export function ChatPromptEditor({
           </div>
         ) : null}
 
+        {resizable || headerAction ? (
+          <div className="flex min-w-0 items-center gap-2">
+            {resizable ? (
+              <ComposerResizeHandle
+                height={inputHeight}
+                onChange={setInputHeight}
+                inputRef={resolvedInputApiRef}
+              />
+            ) : (
+              <span className="flex-1" />
+            )}
+            {headerAction}
+          </div>
+        ) : null}
         {topContent}
         <LexicalChatInput
+          inlineAttachments={inlineAttachments}
+          inputHeight={inputHeight}
           placeholder={placeholder}
           disabled={disabled}
           submitDisabled={submitDisabled}

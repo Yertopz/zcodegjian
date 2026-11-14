@@ -118,6 +118,7 @@ export interface ICredentialStore {
 }
 
 export * from "./test-ids.js";
+export * from "./test-ids-ide.js";
 export * from "./test-ids-workflow.js";
 export * from "./channels.js";
 export * from "./storage.js";
@@ -332,3 +333,4 @@ export { redactFeedbackText } from "./feedbackPrivacy.js";
 export * from "./server-workbench.js";
 
 export * from "./main-agent-prompts.js";
+export * from "./ide-context.js";
