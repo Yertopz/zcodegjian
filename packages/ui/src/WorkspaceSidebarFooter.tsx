@@ -306,8 +306,12 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
                             size="icon-xs"
                             data-testid="copy-user-id"
                             className="min-h-0 p-0 text-foreground-subtle"
-                            aria-label={intl.formatMessage({ id: "sidebar.profile.copyUserId" })}
-                            title={intl.formatMessage({ id: "sidebar.profile.copyUserId" })}
+                            aria-label={intl.formatMessage({
+                              id: "sidebar.profile.copyUserId",
+                            })}
+                            title={intl.formatMessage({
+                              id: "sidebar.profile.copyUserId",
+                            })}
                           >
                             <Copy className="size-3" />
                           </Button>
@@ -380,10 +384,17 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
                   onValueChange={(value) => setInterfaceMode(normalizeInterfaceMode(value))}
                 >
                   <DropdownMenuRadioItem value="coding">
-                    {intl.formatMessage({ id: "settings.interfaceMode.coding" })}
+                    {intl.formatMessage({
+                      id: "settings.interfaceMode.coding",
+                    })}
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="office">
-                    {intl.formatMessage({ id: "settings.interfaceMode.office" })}
+                    {intl.formatMessage({
+                      id: "settings.interfaceMode.office",
+                    })}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="ide">
+                    {intl.formatMessage({ id: "settings.interfaceMode.ide" })}
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
@@ -396,7 +407,9 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <ZoomIn className="size-4" />
-                  {intl.formatMessage({ id: "sidebar.settings.interfaceZoom" })}
+                  {intl.formatMessage({
+                    id: "sidebar.settings.interfaceZoom",
+                  })}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-50">
                   <DropdownMenuItem
@@ -420,7 +433,9 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
                     onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ResetZoom)}
                   >
                     <Maximize className="size-4" />
-                    {intl.formatMessage({ id: "titleBar.menu.view.actualSize" })}
+                    {intl.formatMessage({
+                      id: "titleBar.menu.view.actualSize",
+                    })}
                     <DropdownMenuShortcut>{resetZoomShortcutLabel}</DropdownMenuShortcut>
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>

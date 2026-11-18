@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rename, rm, readdir, stat } from "node:fs/promises";
+import { mkdir, writeFile, rename, rm, readdir, stat, chmod } from "node:fs/promises";
 import { dirname, basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { acquireFileLock } from "@zcode/shared/node";
@@ -17,6 +17,9 @@ interface AtomicWriteTextOptions {
   lockMaxWaitMs?: number;
   tempFileStaleMs?: number;
   useFileLock?: boolean;
+  /** 编辑器替换源码文件时保留权限位；普通配置写入保持原行为。 */
+  mode?: number;
+  validateBeforeRename?: () => Promise<void>;
   beforeRename?: () => void | Promise<void>;
   runRename?: (renameFile: () => Promise<void>) => Promise<void>;
 }
@@ -42,9 +45,12 @@ async function renameWithRetry(
   tempFile: string,
   filePath: string,
   retryDelaysMs: readonly number[] = DEFAULT_RENAME_RETRY_DELAYS_MS,
+  validateBeforeRename?: () => Promise<void>,
 ): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
     try {
+      // Windows 重试期间外部程序可能改盘，每次尝试前都重新校验编辑版本。
+      await validateBeforeRename?.();
       maybeThrowInjectedFsFault({ operation: "rename", path: filePath });
       await rename(tempFile, filePath);
       return;
@@ -100,7 +106,7 @@ async function cleanupStaleTempFilesForTarget(
 
 /**
  * 使用临时文件 + rename 实现原子写入。
- * rename 在同文件系统上是原子的，可避免 read-modify-write 并发时的数据覆盖风险。
+ * rename 在同文件系统上避免读到半份内容；比较与更新仍须由调用方放在同一锁内。
  * 临时文件写在目标文件同目录下，避免 Windows 跨卷 rename 失败。
  */
 export async function atomicWriteText(
@@ -137,11 +143,18 @@ export async function atomicWriteText(
     );
     maybeThrowInjectedFsFault({ operation: "writeFile", path: tempFile });
     await writeFile(tempFile, content, "utf-8");
+    if (options?.mode !== undefined) await chmod(tempFile, options.mode);
     await options?.beforeRename?.();
     // Windows Defender、索引服务或另一个窗口可能短暂占用目标 JSON，
     // 导致原子替换 rename 抛 EPERM/EBUSY/EACCES。这里只对这类临时锁做短暂重试，
     // 仍然把真实权限问题原样抛出，避免静默丢失会话快照。
-    const renameFile = () => renameWithRetry(tempFile, filePath, options?.renameRetryDelaysMs);
+    const renameFile = () =>
+      renameWithRetry(
+        tempFile,
+        filePath,
+        options?.renameRetryDelaysMs,
+        options?.validateBeforeRename,
+      );
     if (options?.runRename) {
       await options.runRename(renameFile);
     } else {
@@ -154,6 +167,24 @@ export async function atomicWriteText(
     throw error;
   } finally {
     await releaseLock?.();
+  }
+}
+
+/** 读版本、比较、写入和结果生成共用同一把锁，避免锁外检查造成丢失更新。 */
+export async function withAtomicFileLock<T>(
+  filePath: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  const release = await acquireFileLock(
+    filePath,
+    DEFAULT_LOCK_RETRY_DELAYS_MS,
+    DEFAULT_LOCK_OWNERLESS_GRACE_MS,
+    DEFAULT_LOCK_MAX_WAIT_MS,
+  );
+  try {
+    return await action();
+  } finally {
+    await release();
   }
 }
 

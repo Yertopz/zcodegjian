@@ -44,7 +44,8 @@ test("下载保存原始字节：按 MIME 对齐扩展名，成功提示不带�
 test("添加到聊天走文件 mention 事件：工作区内相对、工作区外绝对，失败有提示", () => {
   assert.match(source, /dispatchWorkspaceFileAddToChat\(/u);
   assert.match(source, /normalizedPath\.startsWith\(`\$\{normalizedWorkspace\}\/`\)/u);
-  assert.match(source, /relativePath,\n      name,/u);
+  // prettier 折行：对象字面量属性可能各占一行，容忍空白（语义不变）。
+  assert.match(source, /relativePath,\s*name,/u);
   assert.match(source, /preview\.image\.addToChatFailed/u);
   assert.ok("preview.image.addToChatFailed" in zhCN);
   assert.ok("preview.image.addToChatFailed" in enUS);

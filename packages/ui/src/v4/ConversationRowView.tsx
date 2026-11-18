@@ -1,3 +1,9 @@
+import { SentDocumentPreview } from "@/prompt-editor/SentDocumentPreview.js";
+import {
+  splitInlineAttachments,
+  remapInlineAttachments,
+} from "@/prompt-editor/inlineAttachments.js";
+import { ConversationUserInputContent } from "@/v4/ConversationUserInputContent.js";
 /* oxlint-disable eslint(max-lines) -- v4 逐行 row 渲染分发集中收口（每种 row 一个 memo 叶子 + timelineMarker 分隔线），拆分会打散行类型对照。 */
 // Modified by ZCode: F2 提取: ConversationAssistantTextActions 增加 compactForRemoteControl prop 与 resolveTooltip 紧凑态行为(上游 compactForRemoteControl)。
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
@@ -322,6 +328,10 @@ const UserInputAttachmentList = memo(function UserInputAttachmentList({
   readAttachmentRange?: NonNullable<ConversationRowRenderContext["readAttachmentRange"]>;
 }) {
   const { intl } = useZCodeIntl();
+  const [genericAttachment, setGenericAttachment] = useState<{
+    attachment: AttachmentRef;
+    index: number;
+  } | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [failedRefs, setFailedRefs] = useState<ReadonlySet<string>>(() => new Set());
@@ -715,7 +725,8 @@ const UserInputAttachmentList = memo(function UserInputAttachmentList({
     const canOpen =
       (isImage && !isUnavailable && previewItemIndex >= 0) ||
       (isVideo && Boolean(sessionId && readAttachment)) ||
-      (isPdf && Boolean(sessionId && (readAttachment || readAttachmentRange)));
+      (isPdf && Boolean(sessionId && (readAttachment || readAttachmentRange))) ||
+      (!isImage && !isVideo && !isPdf && Boolean(sessionId && readAttachment));
     return (
       <Attachment
         key={`${attachment.ref}-${index}`}
@@ -749,7 +760,12 @@ const UserInputAttachmentList = memo(function UserInputAttachmentList({
             ? () =>
                 isPdf
                   ? void openPdfPreview(attachment, attachmentIndices?.[index] ?? index)
-                  : selectPreviewItem(previewItemIndex)
+                  : !isImage && !isVideo
+                    ? setGenericAttachment({
+                        attachment,
+                        index: attachmentIndices?.[index] ?? index,
+                      })
+                    : selectPreviewItem(previewItemIndex)
             : undefined
         }
         openLabel={
@@ -834,6 +850,14 @@ const UserInputAttachmentList = memo(function UserInputAttachmentList({
           {items}
         </Attachments>
       )}
+      <SentDocumentPreview
+        target={genericAttachment}
+        sessionId={sessionId}
+        rowId={rowId}
+        entityId={entityId}
+        readAttachment={readAttachment}
+        onClose={() => setGenericAttachment(null)}
+      />
       <ImagePreviewDialog
         initialIndex={previewIndex}
         items={previewItems}
@@ -948,7 +972,9 @@ const UserInputRowView = memo(function UserInputRowView({
     webElementContexts.length > 0 ||
     pptxElementReferences.length > 0 ||
     conversationSelections.length > 0;
-  const hasAttachmentArea = hasAttachments || hasContextReferences;
+  const inlineParts = splitInlineAttachments(visibleText, row.attachments?.length ?? 0);
+  const hasInlineAttachments = inlineParts.some((part) => part.index !== undefined);
+  const hasAttachmentArea = (!hasInlineAttachments && hasAttachments) || hasContextReferences;
   const hasAttachmentPills = hasFileAttachments || hasContextReferences;
   const openPptxElementReference = useOpenPptxElementReference({
     workspacePath: context.workspacePath,
@@ -1012,7 +1038,10 @@ const UserInputRowView = memo(function UserInputRowView({
         const result = await onEdit(
           { rowId: row.rowId, entityId: row.entityId! },
           // 不再回写 share URL 尾块：它没有任何消费者，编辑历史消息时顺手清掉。
-          serializeComposerPromptContexts(nextText, editPromptContexts),
+          serializeComposerPromptContexts(
+            remapInlineAttachments(nextText, editAttachmentIndices),
+            editPromptContexts,
+          ),
           // 省略空数组会让 CLI 按 attachments 缺省语义恢复 canonical 原附件，
           // 因此 edit 必须始终提交当前完整列表，显式 [] 才能表达“删除全部”。
           editAttachments,
@@ -1037,7 +1066,15 @@ const UserInputRowView = memo(function UserInputRowView({
         setSubmitting(false);
       }
     },
-    [editAttachments, editContextCount, editPromptContexts, onEdit, row.entityId, row.rowId],
+    [
+      editAttachments,
+      editAttachmentIndices,
+      editContextCount,
+      editPromptContexts,
+      onEdit,
+      row.entityId,
+      row.rowId,
+    ],
   );
   const rewindWorkspaceDisabled = submitting || editWorkspaceRewindAvailability?.enabled !== true;
   const rewindWorkspaceButton = (
@@ -1218,7 +1255,7 @@ const UserInputRowView = memo(function UserInputRowView({
           data-testid={testId(TID_V4_ROW_ATTACHMENTS, String(row.rowId))}
           className="mb-2 flex max-w-xl flex-col items-end gap-2"
         >
-          {hasMediaAttachments ? (
+          {hasMediaAttachments && !hasInlineAttachments ? (
             <div
               data-v4-user-input-media-attachments="true"
               className="flex max-w-full flex-wrap justify-end gap-2"
@@ -1242,7 +1279,7 @@ const UserInputRowView = memo(function UserInputRowView({
               // 保持“文件→评论→网页→PPT→对话引用”的顺序和统一右对齐。
               className="flex max-w-full flex-wrap justify-end gap-2"
             >
-              {hasFileAttachments ? (
+              {hasFileAttachments && !hasInlineAttachments ? (
                 <UserInputAttachmentList
                   attachments={row.attachments}
                   entityId={row.entityId}
@@ -1280,7 +1317,44 @@ const UserInputRowView = memo(function UserInputRowView({
           attachments={row.attachments}
           contextAttachmentCount={countComposerPromptContexts(parsedPrompt)}
           epilogue={epilogue}
-        />
+        >
+          {hasInlineAttachments ? (
+            <div className="whitespace-pre-wrap break-words">
+              {inlineParts.map((part, index) =>
+                part.index === undefined ? (
+                  <ConversationUserInputContent
+                    key={index}
+                    text={part.text}
+                    attachments={row.attachments}
+                    contextAttachmentCount={countComposerPromptContexts(parsedPrompt)}
+                  />
+                ) : (
+                  <span
+                    key={index}
+                    data-sent-inline-attachment={part.index}
+                    className="mx-1 inline-flex max-w-full flex-col align-middle"
+                    onClickCapture={(event) => {
+                      if (event.detail === 1) event.preventDefault();
+                    }}
+                  >
+                    {/^(image|video)\//.test(row.attachments![part.index]!.mime) ? (
+                      <span className="text-ui-caption text-foreground-subtle">{part.label}</span>
+                    ) : null}
+                    <UserInputAttachmentList
+                      attachments={[row.attachments![part.index]!]}
+                      attachmentIndices={[part.index]}
+                      entityId={row.entityId}
+                      rowId={row.rowId}
+                      sessionId={context.sessionId ?? undefined}
+                      readAttachment={context.readAttachment}
+                      readAttachmentRange={context.readAttachmentRange}
+                    />
+                  </span>
+                ),
+              )}
+            </div>
+          ) : null}
+        </ConversationUserInputBubble>
       ) : null}
       {status ? (
         <div

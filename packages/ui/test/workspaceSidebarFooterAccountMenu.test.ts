@@ -36,7 +36,8 @@ test("F11-a: 账户菜单头部包含套餐 badge 与用户 ID 展示结构", ()
   assert.match(footerSource, /data-testid="profile-menu-plan"/);
   assert.match(footerSource, /data-testid="profile-menu-id"/);
   assert.match(footerSource, /data-testid="profile-menu-name"/);
-  assert.match(footerSource, /<WorkspaceSidebarFooterPlanBadge state=\{usageSummaryState\}/);
+  // prettier 折行：JSX 属性可能跨行，容忍空白（语义不变）。
+  assert.match(footerSource, /<WorkspaceSidebarFooterPlanBadge\s+state=\{usageSummaryState\}/);
   assert.match(footerSource, /sidebar\.profile\.accountId/);
 });
 
@@ -51,8 +52,9 @@ test("F11-b: 复制用户 ID 走 clipboard, 成功与失败都明示 toast", () 
 });
 
 test("F11-c: 套餐 badge 只在菜单头部出现一次, footer 触发器不再冗余展示", () => {
+  // prettier 折行：JSX 属性可能跨行，容忍空白（语义不变）。
   const occurrences = footerSource.match(
-    /<WorkspaceSidebarFooterPlanBadge state=\{usageSummaryState\}/gu,
+    /<WorkspaceSidebarFooterPlanBadge\s+state=\{usageSummaryState\}/gu,
   );
   assert.equal(occurrences?.length, 1, "套餐 badge 只应有一处渲染点(账户菜单头部)");
 });

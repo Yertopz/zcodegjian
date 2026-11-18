@@ -4,6 +4,7 @@ import type { ModelSelectionView } from "@zcode/services";
 import { validateModelSelectionOptions } from "@zcode/provider";
 
 export interface ComposerSubmissionConfig {
+  ideContext?: import("@zcode/shared").IdeContext;
   modelSelection: ModelSelection;
   mode: SubmissionMode;
   planEnabled: boolean;

@@ -15,6 +15,7 @@ interface UseCodeCommentContextsOptions {
   onContextRemoved?: (context: CodeCommentComposerAttachment) => void;
   requestFocus?: () => void;
   scopeKey: string;
+  workspaceKey?: string;
 }
 
 interface UseCodeCommentContextsResult {
@@ -45,6 +46,7 @@ export function useCodeCommentContexts({
   onContextRemoved,
   requestFocus,
   scopeKey,
+  workspaceKey,
 }: UseCodeCommentContextsOptions): UseCodeCommentContextsResult {
   const [contexts, setContexts] = useState<readonly CodeCommentComposerAttachment[]>([]);
   const contextsRef = useRef(contexts);
@@ -100,6 +102,15 @@ export function useCodeCommentContexts({
       ) {
         return;
       }
+      if (
+        workspaceKey &&
+        (event.detail.targetWorkspaceKey ??
+          getCodeCommentWorkspaceKey(
+            event.detail.workspacePath,
+            event.detail.workspaceIdentity,
+          )) !== workspaceKey
+      )
+        return;
       // V4 迁移只保留了 PreviewPane 的事件发送端，没有任何 composer
       // 消费端；claim 后由唯一 primary pane 接管，避免分屏时重复写入多个输入区。
       event.preventDefault();
@@ -133,7 +144,7 @@ export function useCodeCommentContexts({
       window.removeEventListener(CODE_COMMENT_ADD_TO_CHAT_EVENT, handleAdd);
       window.removeEventListener(CODE_COMMENT_REMOVE_FROM_CHAT_EVENT, handleRemove);
     };
-  }, [commitContexts, listenAddToChatEvents, removeContext]);
+  }, [commitContexts, listenAddToChatEvents, removeContext, workspaceKey]);
 
   return useMemo(
     () => ({

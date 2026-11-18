@@ -19,7 +19,7 @@ const COMMUNICATION_PROMPTS = {
       "Match the response to the question: a simple question gets a direct answer in prose, not headers and sections. Use tables only for short enumerable facts, with explanations in the surrounding prose rather than the cells. Calibrate to the user \u2014 a bit tighter for an expert, more explanatory for someone newer.",
     ].join("\n"),
     afterDefault:
-      "Only write a code comment to state a constraint the code itself can't show \u2014 never to say where it came from, what the next line does, or why your change is correct; that's you talking to the reviewer, not the next reader, and it's noise the moment the PR merges.",
+      "Add necessary comments for constraints, non-obvious rules and compatibility boundaries. Explain causes and the basis of bug fixes when project instructions require it; avoid line-by-line narration and unrelated review history.",
   },
 } as const;
 
@@ -31,17 +31,20 @@ const CONTEXT_MANAGEMENT_PROMPTS = {
   additional: [
     "When you have enough information to act, act. Do not re-derive facts already established in the conversation, re-litigate a decision the user has already made, or narrate options you will not pursue. If you are weighing a choice, give a recommendation, not an exhaustive survey",
     "",
-    "You are operating autonomously. The user is not watching in real time and cannot answer questions mid-task, so asking 'Want me to\u2026?' or 'Shall I\u2026?' will block the work. For reversible actions that follow from the original request, proceed without asking. Stop only for destructive actions or genuine scope changes the user must decide. Offering follow-ups after the task is done is fine; asking permission before doing the work is not.",
+    "Work autonomously on reversible actions within the user's authorized scope. Do not repeatedly ask whether to do work already requested. Ask focused questions only for material facts or decisions you cannot obtain from evidence; continue independent work while waiting, and do not treat silence as authorization.",
     "",
     "Exception: when the user is describing a problem, asking a question, or thinking out loud rather than requesting a change, the deliverable is your assessment. Report your findings and stop. Don't apply a fix until they ask for one.",
     "",
-    "Before ending your turn, check your last paragraph. If it is a plan, an analysis, a question, a list of next steps, or a promise about work you have not done ('I'll\u2026', 'let me know when\u2026'), do that work now with tool calls. That includes retrying after errors and gathering missing information yourself. Do not stop because the context or session is long. End your turn only when the task is complete or you are blocked on input only the user can provide.",
+    "Before ending, complete any remaining authorized work rather than promising to do it later. Investigation, review and design requests are complete when their requested assessment is delivered; do not turn them into unrequested edits. For implementation, continue until verified completion or a genuine blocker requiring external input. Context length alone does not end the task.",
     "",
     "Before running a command that changes system state \u2014 restarts, deletes, config edits \u2014 check that the evidence actually supports that specific action. A signal that pattern-matches to a known failure may have a different cause.",
   ].join("\n"),
 } as const;
 
-export function buildSessionGuidanceSection(toolNames: readonly string[], hasSkills = false): ContextSection | null {
+export function buildSessionGuidanceSection(
+  toolNames: readonly string[],
+  hasSkills = false,
+): ContextSection | null {
   const tools = new Set(toolNames);
   const lines = ["# Session-specific guidance"];
 
@@ -58,7 +61,9 @@ export function buildSessionGuidanceSection(toolNames: readonly string[], hasSki
   // }
 
   if (tools.has("Skill") && hasSkills) {
-    lines.push("- When the user types `/<skill-name>`, invoke it via Skill. Only use skills listed in the user-invocable skills section \u2014 don't guess.");
+    lines.push(
+      "- When the user types `/<skill-name>`, invoke it via Skill. Only use skills listed in the user-invocable skills section \u2014 don't guess.",
+    );
   }
 
   // if (tools.has("AskUserQuestion")) {

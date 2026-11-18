@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- 文件树行集中维护拖拽、打开方式、Git 状态与上下文菜单交互。 */
 import type { EditorInfo, OpenInEditorRemoteTarget } from "@zcode/shared";
-import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
+import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import { AlertCircle, ChevronRight, LoaderCircle } from "lucide-react";
 import { TID_WORKSPACE_FILE_TREE_ROW, testId } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
@@ -52,8 +52,9 @@ import {
 import { getWorkspaceFileTreeHierarchyGuideStyle } from "@/workspace-file-tree/hierarchyGuides.js";
 import { useWorkspaceFileTreeRowDragState } from "@/workspace-file-tree/useWorkspaceFileTreeRowDragState.js";
 import { WorkspaceFileTreeRowName } from "@/workspace-file-tree/WorkspaceFileTreeRowName.js";
+import { areWorkspaceFileTreeRowPropsEqual } from "@/workspace-file-tree/performance.js";
 
-export function WorkspaceFileTreeRowView({
+function WorkspaceFileTreeRowViewImpl({
   layout = "absolute",
   row,
   selected,
@@ -396,3 +397,9 @@ export function WorkspaceFileTreeRowView({
     </div>
   );
 }
+
+// 活动文件只改变新旧两行的选中态；不能为整屏未变化的菜单/提示重新构造 JSX。
+export const WorkspaceFileTreeRowView = memo(
+  WorkspaceFileTreeRowViewImpl,
+  areWorkspaceFileTreeRowPropsEqual,
+);

@@ -143,6 +143,19 @@ async function executeToolCallImpl(
   const traceId = traceContext.traceId;
   const turnId = traceContext.turnId ?? deps.turnId;
 
+  // 工具名先规范化，刷新/别名/MCP App 不能绕过本轮能力限制。
+  if (deps.isToolAllowed?.(canonicalToolCall.name) === false) {
+    const result = createErrorResult(
+      canonicalToolCall,
+      createCoreError(
+        CoreErrorType.ToolNotFound,
+        "ide_tool_not_allowed: " + canonicalToolCall.name,
+      ),
+    );
+    await emitToolCallError(deps, toolCall.id, traceContext, turnId, result.error);
+    return result;
+  }
+
   if (!entry) {
     const result = createErrorResult(
       toolCall,

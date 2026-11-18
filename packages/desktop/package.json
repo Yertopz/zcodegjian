@@ -24,7 +24,8 @@
     "audit:bundle-size": "node scripts/audit-bundle-size.mjs",
     "postinstall": "node scripts/node-pty-rebuild.mjs",
     "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "lint:fix": "oxlint --fix",
+    "test:ide-e2e": "pnpm exec tsup && node --import tsx --test test/ideMode.e2e.mjs"
   },
   "dependencies": {
     "@babel/runtime": "^7.24.5",

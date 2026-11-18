@@ -76,6 +76,7 @@ type ConversationV4AgentService = Pick<
   | "attachmentAbortV4"
   | "attachmentPreviewSourceV4"
   | "attachmentReadV4"
+  | "conversationAttachmentReadV4"
   | "onDynamicConversationFrame"
   | "onDynamicLocalTtftFacts"
   | "onAgentRuntimeRestarted"
@@ -328,10 +329,16 @@ export function createAgentConversationTransport(
     async sendCommand(envelope: CommandEnvelope): Promise<CommandAck> {
       const hello = await ensureHandshake();
       const payload = envelope.payload as {
+        ideContext?: unknown;
         planEnabled?: boolean;
         config?: { planEnabled?: boolean };
-        firstInput?: { planEnabled?: boolean };
+        firstInput?: { planEnabled?: boolean; ideContext?: unknown };
       };
+      if (
+        hello.capabilities.ideContextV1 !== true &&
+        (payload.ideContext || payload.firstInput?.ideContext)
+      )
+        throw new Error("proto.ideContextUnsupported");
       // 旧 Host 会剥掉未知字段；不能把 yolo + Plan 错发成完全访问执行。
       if (
         hello.capabilities.independentPlanState !== true &&
@@ -401,6 +408,12 @@ export function createAgentConversationTransport(
     },
     async attachmentRead(params) {
       params.signal?.throwIfAborted();
+      if (
+        params.purpose === "document" &&
+        (!params.target || params.attachmentIndex === undefined)
+      ) {
+        throw new Error("fault.attachment.documentIdentityRequired");
+      }
       await ensureHandshake();
       params.signal?.throwIfAborted();
       if (target.createLocalMediaPreviewUrl && params.mediaType?.startsWith("video/")) {
@@ -432,7 +445,7 @@ export function createAgentConversationTransport(
         if (chunkIndex >= PROTOCOL_V4_LIMITS.attachmentPreviewMaxChunks) {
           throw new Error("fault.attachment.previewTooManyChunks");
         }
-        const result = await agentService.attachmentReadV4({
+        const readParams = {
           ...workspace,
           sessionId: params.sessionId,
           ref: params.ref,
@@ -442,7 +455,16 @@ export function createAgentConversationTransport(
             : {}),
           offset,
           limit: PROTOCOL_V4_LIMITS.attachmentChunkMaxBytes,
-        });
+        };
+        // 普通文件不属于媒体白名单；使用现有的消息附件接口核对行身份与原始下标。
+        const result =
+          params.purpose === "document"
+            ? await agentService.conversationAttachmentReadV4({
+                ...readParams,
+                target: params.target!,
+                attachmentIndex: params.attachmentIndex!,
+              })
+            : await agentService.attachmentReadV4(readParams);
         // 旧的 request-id 保护只会忽略晚到结果，Dialog 关闭后仍会继续拉取
         // 最多 30MiB 视频。高层读取拥有取消语义，在每个在途 chunk 返回后立即停住。
         params.signal?.throwIfAborted();

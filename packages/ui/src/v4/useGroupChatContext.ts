@@ -13,6 +13,8 @@ import { isMultiAgentModeActive } from "@/lib/multiAgentMode.js";
 import type { ConversationRowRenderContext } from "@/v4/conversationRowContext.js";
 
 interface GroupChatSources {
+  /** 与 Composer 共用 SessionPane 的执行配置，辅助对话不继承主对话的 IDE 限制。 */
+  ideAssistantActive?: boolean;
   /** 会话快照的 config（SessionPane 已按 sessionId 归一），读 mainAgentPromptId。 */
   sessionConfigMainAgentPromptId?: string | null;
   /** 团队开关（useMultiAgentConfig 的 settings.enabled）；读不到时 undefined。 */
@@ -41,10 +43,12 @@ export function useGroupChatContext(sources: GroupChatSources): {
   groupChatActive: boolean;
   groupChatMembers: GroupChatMembersMap;
 } {
-  const groupChatActive = isMultiAgentModeActive({
-    mainAgentPromptId: sources.sessionConfigMainAgentPromptId,
-    multiAgentEnabled: sources.multiAgentEnabled,
-  });
+  const groupChatActive =
+    !sources.ideAssistantActive &&
+    isMultiAgentModeActive({
+      mainAgentPromptId: sources.sessionConfigMainAgentPromptId,
+      multiAgentEnabled: sources.multiAgentEnabled,
+    });
 
   return useMemo(() => {
     const members = new Map<string, GroupChatMemberEntry>();

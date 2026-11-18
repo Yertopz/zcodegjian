@@ -80,6 +80,8 @@ import { shouldOpenWorkflowArtifactInBrowser } from "@/lib/workflowArtifactOpen.
 import { useWhiteboardStore } from "@/store/whiteboardStore.js";
 import { useModelTrajectoryOpenBridge } from "@/hooks/useModelTrajectoryOpenBridge.js";
 import { useServices } from "@/hooks/useServices.js";
+import { useIdeEditorStore } from "@/store/ideEditorStore.js";
+import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { clearSelectionSideChat } from "@/lib/selectionSideChatRuntime.js";
 import { clearConversationSelectionReferenceScope } from "@/lib/conversationSelectionReference.js";
@@ -175,6 +177,7 @@ export function useAppPanels(options: {
   const activeWorkspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
   const { zcodeAgentService, zcodeSessionService } = useServices();
   const isOfficeMode = useIsOfficeMode();
+  const isIdeMode = useZCodeStore((state) => state.interfaceMode === "ide");
   const sidePaneMemoryKey = useMemo(
     () =>
       buildTaskSidePaneMemoryKey({
@@ -346,8 +349,31 @@ export function useAppPanels(options: {
     });
   }, [activeTaskId, activeWorkspaceKey, commitSidePaneState, sidePaneOwnerId]);
 
+  useEffect(() => {
+    if (
+      isIdeMode &&
+      getActiveSidePaneTab(latestSidePaneMemoryRef.current.sidePaneState)?.type === "code-viewer"
+    ) {
+      setIsSidePaneCollapsed(true);
+    }
+  }, [isIdeMode, activeWorkspaceKey, sidePaneOwnerId]);
+  const openInIde = useCallback(
+    (sources: readonly CodeViewerSource[]) => {
+      useIdeEditorStore.getState().requestOpen(activeWorkspaceKey, sources, {
+        workspacePath: workspaceAbsPath,
+        workspaceIdentity,
+        workspaceRemoteSessionId: workspaceRemoteSessionId ?? undefined,
+      });
+    },
+    [activeWorkspaceKey, workspaceAbsPath, workspaceIdentity, workspaceRemoteSessionId],
+  );
+
   const handleOpenCodeViewer = useCallback(
     (source: CodeViewerSource) => {
+      if (isIdeMode) {
+        openInIde([source]);
+        return;
+      }
       revealSidePaneForCurrentOwner();
       commitOpenedSidePaneState((current) => {
         const next = openCodeViewerSidePane(current, source, sidePaneOwnerIdRef.current);
@@ -360,12 +386,22 @@ export function useAppPanels(options: {
         return next;
       });
     },
-    [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath],
+    [
+      commitOpenedSidePaneState,
+      revealSidePaneForCurrentOwner,
+      workspaceAbsPath,
+      isIdeMode,
+      openInIde,
+    ],
   );
 
   const handleOpenCodeViewers = useCallback(
     (sources: readonly CodeViewerSource[]) => {
       if (sources.length === 0) return;
+      if (isIdeMode) {
+        openInIde(sources);
+        return;
+      }
       revealSidePaneForCurrentOwner();
       commitOpenedSidePaneState((current) => {
         const next = openCodeViewerSidePanes(current, sources, sidePaneOwnerIdRef.current, 0);
@@ -375,7 +411,13 @@ export function useAppPanels(options: {
         return next;
       });
     },
-    [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath],
+    [
+      commitOpenedSidePaneState,
+      revealSidePaneForCurrentOwner,
+      workspaceAbsPath,
+      isIdeMode,
+      openInIde,
+    ],
   );
 
   const handleOpenBrowserUrl = useCallback(

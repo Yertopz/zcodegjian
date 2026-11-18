@@ -355,12 +355,15 @@ export interface ZCodeAgentSetModeParams extends ZCodeAgentSessionTarget {
 }
 
 export interface ZCodeAgentGenerateWorkspaceTextParams extends ZCodeAgentWorkspaceTarget {
+  /** Renderer/Host 之间使用可序列化 ID 取消；signal 仅用于服务内直接调用。 */
+  operationId?: string;
   selection: ZCodeWorkspaceGenerateTextParams["selection"];
   prompt?: string;
   messages?: ZCodeWorkspaceGenerateTextParams["messages"];
   tools?: ZCodeWorkspaceGenerateTextParams["tools"];
   querySource: string;
   maxOutputTokens?: number;
+  /** 只供同进程调用；Renderer/Web 经 RPC 时使用 operationId。 */
   signal?: AbortSignal;
   /**
    * 协议层 RPC 超时。thinking 模型的长请求会超过协议 client 默认的
@@ -846,6 +849,10 @@ export interface IZCodeAgentService {
   generateWorkspaceText(
     params: ZCodeAgentGenerateWorkspaceTextParams,
   ): Promise<ZCodeWorkspaceGenerateTextResult>;
+  /** 取消本 Host 的在途文本请求；false 表示该工作区身份下无活动请求。 */
+  cancelWorkspaceTextGeneration(
+    params: ZCodeAgentWorkspaceTarget & { operationId: string },
+  ): Promise<boolean>;
   testModelConnectivity(
     params: ZCodeAgentTestModelConnectivityParams,
   ): Promise<ZCodeProviderTestModelConnectivityResult>;

@@ -6,13 +6,15 @@
 //   oversized 大图路径降级）→ ref 直接携带绝对路径，零上传；
 // - dataBase64（粘贴截图等内联图）→ 高层 put（内部 begin/chunk/commit）→ artifact ref；
 // - textContent（无路径文本，web 回退面）→ 编码后同走 put；
-// - 三者皆无（元信息-only）→ 丢弃并告警（无内容可发，不伪造引用）。
+// - 无路径的普通二进制 File → 按协议大小上限编码，复用同一 put；
+// - 没有上述内容（元信息-only）→ 丢弃并告警（无内容可发，不伪造引用）。
 import type { ZCodePromptAttachment } from "@zcode/shared";
 import type {
   AttachmentRef,
   V4AttachmentPutParams,
   V4AttachmentPutResult,
 } from "@zcode/shared/zcode-protocol-v4";
+import { PROTOCOL_V4_LIMITS } from "@zcode/shared/zcode-protocol-v4";
 import { logger } from "@/logger.js";
 import type { AttachmentUploadOptions } from "@/v4/attachmentUploadTransaction.js";
 
@@ -23,6 +25,9 @@ export type AttachmentPutFn = (
 
 function encodeTextToBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);
+  return encodeBytesToBase64(bytes);
+}
+function encodeBytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
   for (let index = 0; index < bytes.length; index += chunkSize) {
@@ -42,6 +47,7 @@ export async function uploadComposerAttachment(
   sessionId: string,
   attachment: ZCodePromptAttachment,
   options?: AttachmentUploadOptions,
+  sourceFile?: File,
 ): Promise<AttachmentRef | null> {
   const fileName = attachment.filename;
   const mime = attachment.mimeType;
@@ -58,12 +64,19 @@ export async function uploadComposerAttachment(
       bytes: sizeBytes ?? 0,
     };
   }
-  const dataBase64 =
+  let dataBase64 =
     "dataBase64" in attachment && attachment.dataBase64
       ? attachment.dataBase64
       : "textContent" in attachment && attachment.textContent !== undefined
         ? encodeTextToBase64(attachment.textContent)
         : null;
+  if (dataBase64 === null && attachment.kind === "file" && sourceFile) {
+    // 浏览器拖入的 Word/二进制文件没有 localPath，也不是文本，不能只发送文件名。
+    if (sourceFile.size > PROTOCOL_V4_LIMITS.attachmentMaxBytes)
+      throw new Error(`Attachment exceeds ${PROTOCOL_V4_LIMITS.attachmentMaxBytes} bytes`);
+    dataBase64 = encodeBytesToBase64(new Uint8Array(await sourceFile.arrayBuffer()));
+    options?.signal?.throwIfAborted();
+  }
   if (dataBase64 === null) {
     logger.warn(
       `[v4-composer] 附件无内容可发（无 localPath/dataBase64/textContent），已丢弃: ${fileName}`,

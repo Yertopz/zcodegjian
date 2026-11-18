@@ -1,8 +1,7 @@
-import type { KeyboardEvent } from "react";
+import { useCallback, useMemo, type KeyboardEvent } from "react";
 import type { WorkspaceFileGitStatus, WorkspaceFileTreeRow } from "@/workspace-file-tree/model.js";
 import {
   areWorkspaceFilePathsEqual,
-  getWorkspaceDirectoryGitStatuses,
   getWorkspaceFileGitStatus,
   isWorkspaceFileGitIgnored,
 } from "@/workspace-file-tree/model.js";
@@ -13,6 +12,7 @@ import type {
   WorkspaceFileTreeEditorState,
   WorkspaceFileTreeStickyFolderItem,
 } from "@/workspace-file-tree/types.js";
+import { createWorkspaceDirectoryGitStatusLookup } from "@/workspace-file-tree/performance.js";
 
 export function WorkspaceFileTreeStickyFolders({
   items,
@@ -47,6 +47,19 @@ export function WorkspaceFileTreeStickyFolders({
   onOpenBrowserUrl?: (url: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
 }) {
+  const getDirectoryGitStatuses = useMemo(
+    () => createWorkspaceDirectoryGitStatusLookup(gitStatusByPath),
+    [gitStatusByPath],
+  );
+  const handleToggle = useCallback(
+    (row: WorkspaceFileTreeRow) => {
+      onToggleDirectory(row);
+      if (!row.expanded) return;
+      const item = items.find((entry) => entry.row.path === row.path);
+      if (item) requestAnimationFrame(() => onRevealRow(item));
+    },
+    [items, onToggleDirectory, onRevealRow],
+  );
   if (items.length === 0) {
     return null;
   }
@@ -56,12 +69,6 @@ export function WorkspaceFileTreeStickyFolders({
       <div className="pointer-events-auto overflow-hidden rounded-lg">
         {items.map((item) => {
           const row = item.row;
-          const handleToggle = (nextRow: WorkspaceFileTreeRow) => {
-            onToggleDirectory(nextRow);
-            if (nextRow.expanded) {
-              requestAnimationFrame(() => onRevealRow(item));
-            }
-          };
           return (
             <WorkspaceFileTreeRowView
               key={row.path}
@@ -72,7 +79,7 @@ export function WorkspaceFileTreeStickyFolders({
                 getWorkspaceFileGitStatus(gitStatusByPath, row.path) ??
                 (isWorkspaceFileGitIgnored(ignoredPathSet, row.path) ? "ignored" : null)
               }
-              directoryGitStatuses={getWorkspaceDirectoryGitStatuses(gitStatusByPath, row.path)}
+              directoryGitStatuses={getDirectoryGitStatuses(row.path)}
               gitStatusLabelByStatus={gitStatusLabelByStatus}
               contextMenuLabels={contextMenuLabels}
               canOpenLocalFileManager={editorState.canOpenLocalFileManager}

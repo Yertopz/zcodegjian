@@ -13,6 +13,7 @@
  */
 import assert from "node:assert/strict";
 import { register } from "node:module";
+import { resolve } from "node:path";
 import test from "node:test";
 
 register(new URL("./support/stubResolver.mjs", import.meta.url));
@@ -96,7 +97,8 @@ test("win32 defaultApp 分支入口路径也带 -- 终止符", async () => {
   );
   assert.equal(stubApp.protocolClientCalls.length, 1);
   const [call] = stubApp.protocolClientCalls;
-  assert.deepEqual(call.args, ["/app/main/index.js", "--"]);
+  // 当前宿主的平台路径规则仍生效，Windows 上根路径会规范化为盘符路径。
+  assert.deepEqual(call.args, [resolve("/app/main/index.js"), "--"]);
 });
 
 test("非 win32 不插入 --(Linux 用 xdg %u,macOS 由 LaunchServices 传 URL)", async () => {
@@ -117,4 +119,30 @@ test("win32 注册参数顺序:终止符必须是最后一个参数", async () =
   });
   const [call] = stubApp.protocolClientCalls;
   assert.equal(call.args?.at(-1), "--");
+});
+
+test("隔离 E2E 不写入系统协议或 Explorer 入口", async () => {
+  const previous = process.env.ZCODE_E2E_RUN_ID;
+  process.env.ZCODE_E2E_RUN_ID = "ide-isolation";
+  stubApp.resetProtocolClientCalls();
+  try {
+    registerDeepLinkProtocol(logger);
+    assert.equal(stubApp.protocolClientCalls.length, 0);
+    const { installWindowsOpenFolderContextMenu } =
+      await import("../src/main/desktopWindowsOpenFolderContextMenu.js");
+    await installWindowsOpenFolderContextMenu({
+      platform: "win32",
+      executablePath: "invalid-test-executable",
+      argv: [],
+      isDefaultApp: false,
+      locale: "en-US",
+      logger: {
+        info: () => assert.fail("must not register"),
+        warn: () => assert.fail("must not attempt registry write"),
+      },
+    });
+  } finally {
+    if (previous === undefined) delete process.env.ZCODE_E2E_RUN_ID;
+    else process.env.ZCODE_E2E_RUN_ID = previous;
+  }
 });

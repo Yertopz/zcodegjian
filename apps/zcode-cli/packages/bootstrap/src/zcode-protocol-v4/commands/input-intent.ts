@@ -1,6 +1,11 @@
 import type { TurnInputIntentMetadata } from "@zcode/contracts";
 import type { ModelSelection } from "@zcode/shared";
-import type { AttachmentRef, CommandEnvelope, QueueItem } from "@zcode/shared/zcode-protocol-v4";
+import type {
+  AttachmentRef,
+  CommandEnvelope,
+  CommandPayloadMap,
+  QueueItem,
+} from "@zcode/shared/zcode-protocol-v4";
 import type { SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
 import { commandAdmissionOf } from "./executor.js";
 
@@ -8,6 +13,7 @@ interface CanonicalCommandIntent {
   kind: "sendText" | "sendGoalCommand";
   text: string;
   mainAgentPrompt?: TurnInputIntentMetadata["mainAgentPrompt"];
+  ideContext?: import("@zcode/shared").IdeContext;
   modelSelection?: ModelSelection;
   mode?: SubmissionMode;
   planEnabled?: boolean;
@@ -33,6 +39,7 @@ export function inputIntentMetadata(
     fallbackReasonCode?: string;
     attachmentRefs?: readonly AttachmentRef[];
     mainAgentPrompt?: TurnInputIntentMetadata["mainAgentPrompt"];
+    ideContext?: import("@zcode/shared").IdeContext;
     modelSelection?: ModelSelection;
     mode?: SubmissionMode;
     planEnabled?: boolean;
@@ -55,6 +62,14 @@ export function inputIntentMetadata(
     // live intent 过去只带 kind/来源，projection 只能回退可见 command 文案；
     // goal 的 displayText（如 `/GoAl replace X`）不是 runtime 已解析的 canonical objective。
     text: options.text,
+    // 命令载荷已在 admission 校验；通用 envelope 的 unknown 需要按命令类型收窄。
+    ideContext:
+      options.ideContext ??
+      (envelope.type === "sendText"
+        ? (envelope.payload as CommandPayloadMap["sendText"]).ideContext
+        : envelope.type === "createSession"
+          ? (envelope.payload as CommandPayloadMap["createSession"]).firstInput?.ideContext
+          : undefined),
     mainAgentPrompt:
       options.mainAgentPrompt ??
       (
@@ -100,6 +115,7 @@ export function inputIntentMetadataFromCanonical(
     kind: canonical.kind,
     text,
     mainAgentPrompt: canonical.mainAgentPrompt ?? null,
+    ideContext: canonical.ideContext,
     ...(canonical.modelSelection ? { modelSelection: canonical.modelSelection } : {}),
     ...(canonical.mode ? { mode: canonical.mode } : {}),
     ...(canonical.planEnabled !== undefined ? { planEnabled: canonical.planEnabled } : {}),
@@ -136,6 +152,7 @@ export function inputIntentMetadataFromQueueItem(
     kind: item.kind,
     text: canonicalText,
     mainAgentPrompt: item.mainAgentPrompt ?? null,
+    ideContext: item.ideContext,
     ...(item.modelSelection ? { modelSelection: item.modelSelection } : {}),
     ...(item.mode ? { mode: item.mode } : {}),
     ...(item.planEnabled !== undefined ? { planEnabled: item.planEnabled } : {}),

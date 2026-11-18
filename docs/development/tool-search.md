@@ -39,8 +39,9 @@
 ## 曝光规则（`core/tool/search/exposure.ts`）
 
 - 常驻：`alwaysLoad` 或未声明 `shouldDefer` 的工具；内置常驻含 Read/Write/Edit/Bash/Glob/Grep/
-  Skill/Agent/AskUserQuestion/ToolSearch。其余内置工具（cron、todo、workflow、off-peak、js、
-  Task 别名、send-message 等）声明 `shouldDefer: true`，部分带 `searchHint`。
+  Skill/Agent/AskUserQuestion/ToolSearch，以及各自模式中已注册的 SendMessage/CreateAgent。
+  cron、todo、workflow、off-peak、js、Task 别名等延迟工具声明 `shouldDefer: true`，部分带 `searchHint`。
+  常驻声明不改变工具注册、模式白名单或权限。
 - `native`：发送常驻 + 已发现 deferred 的完整 schema（后者带 `deferLoading`），其余只公告名字。
 - `local`：发送常驻 + `ToolSearch` + `DeferredToolCall`；搜索命中的定义在结果位置展开。
 - 无 deferred 工具或缺控制入口时整链关闭并记录 reason（`no_deferred_tools` /

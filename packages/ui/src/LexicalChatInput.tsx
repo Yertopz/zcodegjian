@@ -1,3 +1,10 @@
+import {
+  InlineAttachmentContext,
+  InlineAttachmentNode,
+  InlineAttachmentsPlugin,
+  type InlineAttachmentContextValue,
+} from "@/prompt-editor/InlineAttachmentNode.js";
+import { applyPromptRewrite } from "@/prompt-editor/applyPromptRewrite.js";
 /* eslint-disable max-lines */
 /**
  * LexicalChatInput — 基于 Lexical 的聊天输入框
@@ -67,6 +74,7 @@ export interface ChatComposerPasteEvent {
 }
 
 export interface LexicalChatInputHandle {
+  applyRewrittenText: (text: string, expected: string) => boolean;
   clear: () => void;
   focus: () => void;
   getEditorState: () => EditorState;
@@ -1222,6 +1230,7 @@ function EditorApiPlugin({
     }
 
     editorApiRef.current = {
+      applyRewrittenText: (text, expected) => applyPromptRewrite(editor, text, expected),
       clear: () => resetEditor(editor),
       focus: () => editor.focus(),
       getEditorState: () => editor.getEditorState(),
@@ -1263,6 +1272,8 @@ function EditorApiPlugin({
 }
 
 interface LexicalChatInputProps {
+  inlineAttachments?: InlineAttachmentContextValue;
+  inputHeight?: number;
   placeholder?: string;
   disabled?: boolean;
   submitDisabled?: boolean;
@@ -1296,6 +1307,8 @@ const EDITOR_THEME = {
 };
 
 export function LexicalChatInput({
+  inlineAttachments,
+  inputHeight,
   placeholder,
   disabled = false,
   submitDisabled = false,
@@ -1410,6 +1423,7 @@ export function LexicalChatInput({
       // mention node 使用固定行高的 inline-flex chip，普通正文如果继承浏览器 normal line-height，
       // 在 token 后继续输入文字时会按不同 line box 计算基线；这里显式收口正文行高。
       className="min-h-10 max-h-40 overflow-y-auto text-ui-base leading-5 text-foreground outline-none focus-visible:outline-none"
+      style={inputHeight === undefined ? undefined : { height: inputHeight, maxHeight: "70vh" }}
       data-testid={inputTestId}
       onFocus={onFocus}
       {...contentEditableProps}
@@ -1420,7 +1434,7 @@ export function LexicalChatInput({
     () => ({
       namespace: "ChatInput",
       theme: EDITOR_THEME,
-      nodes: [PromptMentionNode],
+      nodes: [PromptMentionNode, InlineAttachmentNode],
       // LexicalComposer initialConfig 每次 render 新建会让输入区子树被记录为 props 变化；
       // 配置内容本身是静态的，固定引用能避免无关状态更新触发 composer 子树冒泡。
       onError: (error: Error) => {
@@ -1432,49 +1446,55 @@ export function LexicalChatInput({
 
   return (
     <div className="relative flex-1">
-      <LexicalComposer initialConfig={initialConfig}>
-        <div className="relative">
-          <PlainTextPlugin contentEditable={contentEditable} ErrorBoundary={LexicalErrorBoundary} />
-          <HistoryPlugin />
-          <PromptClipboardPlugin />
-          <TextContentPlugin onChange={onChange} />
-          <KeyboardPlugin
-            onSubmit={handleSubmit}
-            onModifiedSubmit={onModifiedSubmit}
-            disabled={disabled}
-            submitDisabled={submitDisabled}
-            allowSubmitWhenEmpty={allowSubmitWhenEmpty}
-            enterSubmits={enterSubmits}
-          />
-          <PromptHistoryPlugin entries={promptHistory} disabled={disabled} />
-          <EditablePlugin editable={!disabled} />
-          <E2ELexicalInputBridgePlugin inputTestId={inputTestId} />
-          <EditorApiPlugin editorApiRef={editorApiRef} />
-          <LeadingChineseSlashAliasPlugin disabled={disabled} />
-          <PasteCapturePlugin disabled={disabled} onPaste={onPaste} />
-        </div>
-        <SlashCommandPlugin
-          workspacePath={workspacePath}
-          workspaceIdentity={workspaceIdentity}
-          sessionId={skillCatalogSessionId ?? taskId}
-          provider={activeTaskProvider}
-          container={triggerPanelContainer}
-          disabled={disabled}
-          excludedCommandNames={excludedSlashCommandNames}
-          appCommands={appSlashCommands}
-        />
-        {enableMentionPanel ? (
-          <MentionPlugin
+      <InlineAttachmentContext.Provider value={inlineAttachments ?? null}>
+        <LexicalComposer initialConfig={initialConfig}>
+          <div className="relative">
+            <PlainTextPlugin
+              contentEditable={contentEditable}
+              ErrorBoundary={LexicalErrorBoundary}
+            />
+            <HistoryPlugin />
+            <InlineAttachmentsPlugin />
+            <PromptClipboardPlugin />
+            <TextContentPlugin onChange={onChange} />
+            <KeyboardPlugin
+              onSubmit={handleSubmit}
+              onModifiedSubmit={onModifiedSubmit}
+              disabled={disabled}
+              submitDisabled={submitDisabled}
+              allowSubmitWhenEmpty={allowSubmitWhenEmpty}
+              enterSubmits={enterSubmits}
+            />
+            <PromptHistoryPlugin entries={promptHistory} disabled={disabled} />
+            <EditablePlugin editable={!disabled} />
+            <E2ELexicalInputBridgePlugin inputTestId={inputTestId} />
+            <EditorApiPlugin editorApiRef={editorApiRef} />
+            <LeadingChineseSlashAliasPlugin disabled={disabled} />
+            <PasteCapturePlugin disabled={disabled} onPaste={onPaste} />
+          </div>
+          <SlashCommandPlugin
             workspacePath={workspacePath}
             workspaceIdentity={workspaceIdentity}
             sessionId={skillCatalogSessionId ?? taskId}
             provider={activeTaskProvider}
             container={triggerPanelContainer}
             disabled={disabled}
-            onWhiteboardMentionSelected={onWhiteboardMentionSelected}
+            excludedCommandNames={excludedSlashCommandNames}
+            appCommands={appSlashCommands}
           />
-        ) : null}
-      </LexicalComposer>
+          {enableMentionPanel ? (
+            <MentionPlugin
+              workspacePath={workspacePath}
+              workspaceIdentity={workspaceIdentity}
+              sessionId={skillCatalogSessionId ?? taskId}
+              provider={activeTaskProvider}
+              container={triggerPanelContainer}
+              disabled={disabled}
+              onWhiteboardMentionSelected={onWhiteboardMentionSelected}
+            />
+          ) : null}
+        </LexicalComposer>
+      </InlineAttachmentContext.Provider>
     </div>
   );
 }

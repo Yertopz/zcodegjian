@@ -1,3 +1,5 @@
+// Modified by ZCode: canonical input intent 保存 IDE 文件快照，排队和恢复不读取后来的 UI 状态。
+import { ideContextSchema } from "../ide-context.js";
 import { conversationQuotesSchema } from "../conversationSelection.js";
 import { botGroupInputSourceSchema } from "../bots.js";
 // CLI admission 后的自包含输入事实。
@@ -77,6 +79,7 @@ export const conversationInputIntentSchema = z
     attachments: z.array(attachmentRefSchema).default([]),
     // optional 只服务旧 snapshot hydration；新 admission 必须填入完整 Submission。
     mainAgentPrompt: mainAgentPromptSnapshotSchema.optional(),
+    ideContext: ideContextSchema.optional(),
     modelSelection: modelSelectionSchema.optional(),
     mode: submissionModeSchema.optional(),
     planEnabled: z.boolean().optional(),

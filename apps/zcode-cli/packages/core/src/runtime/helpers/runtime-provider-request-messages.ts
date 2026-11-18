@@ -1,4 +1,5 @@
 import { buildToolExposure } from "../../tool/search/exposure.js";
+import { isIdeToolAllowed } from "./ide-tool-policy.js";
 import type { ModelToolContract } from "@zcode/contracts";
 import type { RuntimeMessageEntry } from "../../agent/message-history.js";
 import type { ToolRegistry } from "../../tool/registry.js";
@@ -10,7 +11,7 @@ import {
 } from "./provider-request-messages.js";
 
 type RequestRuntime = {
-  readonly config: Pick<AgentRuntimeConfig, "midConversationSystem" | "toolSearch">;
+  readonly config: Pick<AgentRuntimeConfig, "midConversationSystem" | "toolSearch" | "ideContext">;
 };
 
 interface MessageProjectionInput {
@@ -33,8 +34,9 @@ export function prepareRuntimeProviderRequest(
 ) {
   const exposure = buildToolExposure({
     model: input.model,
-    mode: runtime.config.toolSearch?.mode,
-    tools: input.tools,
+    // 最终消费点仍做交集，禁止 ToolSearch 再装配 DeferredToolCall 绕回插件目录。
+    mode: runtime.config.ideContext ? "off" : runtime.config.toolSearch?.mode,
+    tools: input.tools.filter((tool) => isIdeToolAllowed(runtime.config.ideContext, tool.name)),
     registry: input.registry,
     entries: input.entries,
   });

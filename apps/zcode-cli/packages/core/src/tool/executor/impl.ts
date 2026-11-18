@@ -27,6 +27,7 @@ export class ToolExecutorImpl implements ToolExecutor {
       agentTelemetry: options.agentTelemetry,
       agentTelemetryActorKind: options.agentTelemetryActorKind,
       registry: options.registry,
+      isToolAllowed: options.isToolAllowed,
       permissionService: options.permissionService,
       permissionBroker: options.permissionBroker ?? createDenyPermissionBroker(),
       emitEvent: options.emitEvent,
@@ -98,6 +99,8 @@ export class ToolExecutorImpl implements ToolExecutor {
     options?: ToolExecuteOptions,
   ): Promise<unknown> {
     options?.signal?.throwIfAborted();
+    if (this.deps.isToolAllowed?.(entry.metadata.name) === false)
+      throw new Error("ide_tool_not_allowed");
     const trace =
       options?.traceContext ??
       this.deps.traceContext ??

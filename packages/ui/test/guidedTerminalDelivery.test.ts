@@ -486,9 +486,10 @@ test("注入面为 null 时不渲染按钮（办公模式等整体关闭终端�
 test("壳层在办公模式下把注入面置空（源码级护栏）", () => {
   // 上面那条渲染用例锁的是 provider 对 null 的处理；这条锁的是**壳层确实会传 null**。
   // 少了它，办公模式下按钮会重新出现并指向一个不存在的终端。
+  // prettier 会按行宽把三目折成多行，匹配时容忍空白（语义不变）。
   const source = readSource("src/app-shell/WorkspaceShellLayout.tsx");
   assert.ok(
-    source.includes("onSend={isOfficeMode ? null : handleSendCommandToTerminal}"),
+    /onSend=\{\s*isOfficeMode\s*\?\s*null\s*:\s*handleSendCommandToTerminal\s*\}/.test(source),
     "壳层必须在办公模式下把 onSend 置空",
   );
 });

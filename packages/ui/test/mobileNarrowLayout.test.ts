@@ -54,9 +54,13 @@ test("窄屏首次进入自动收起侧栏（阈值 768 + 只判定一次）", (
 test("窄视口判定用 max-width: 767px，且头部简化只在 web 路径生效", () => {
   const source = readSource("src/app-shell/WorkspaceShellLayout.tsx");
   assert.match(source, /const NARROW_VIEWPORT_MEDIA_QUERY = "\(max-width: 767px\)";/);
-  assert.match(source, /simplifyForNarrowRemote=\{!isDesktop && isNarrowViewport\}/);
+  // prettier 会按行宽折行，断言允许属性值跨行（语义：!isDesktop && isNarrowViewport）。
+  assert.match(
+    source,
+    /simplifyForNarrowRemote=\{\s*!isDesktop\s*&&\s*isNarrowViewport\s*\}/,
+  );
   // 桌面应用窗口（isDesktop）不得被简化：否则 1280 的桌面对照会出现差异。
-  assert.equal(/simplifyForNarrowRemote=\{isNarrowViewport\}/.test(source), false);
+  assert.equal(/simplifyForNarrowRemote=\{\s*isNarrowViewport\s*\}/.test(source), false);
 });
 
 test("窄屏隐藏顶部浮层的任务前进/后退（为标题腾宽度）", () => {

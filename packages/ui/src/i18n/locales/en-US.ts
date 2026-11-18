@@ -1,6 +1,44 @@
 // Modified by ZCode: X8/F11/hole/F2_*: 新增 i18n 键(quota-reset/account-menu/workflow hole/highspeed 等),其余与上游键合并。
 /** English translations */
 const enUS: Record<string, string> = {
+  "ideMode.search.sidebar": "IDE sidebar",
+  "ideMode.search.files": "Files",
+  "ideMode.search.search": "Search",
+  "ideMode.search.title": "Workspace text search",
+  "ideMode.search.placeholder": "Search workspace text…",
+  "ideMode.search.caseSensitive": "Match case",
+  "ideMode.search.run": "Search",
+  "ideMode.search.cancel": "Cancel search",
+  "ideMode.search.hint": "Disk text · Respects .zcodeignore · Up to 256 KiB per file",
+  "ideMode.search.busy": "Searching…",
+  "ideMode.search.idle": "Enter text and press Enter to search",
+  "ideMode.search.count": "{lines} matching lines in {files} files",
+  "ideMode.search.empty": "No matching text",
+  "ideMode.search.truncated":
+    "Search limit reached. Results may be incomplete. Use a more specific query.",
+  "ideMode.search.skipped": "Skipped {count} files (size, binary, permissions, or file changes)",
+  "ideMode.search.failed":
+    "Search failed. Check the workspace connection; upgrade and restart an older Host.",
+  "ideMode.search.cancelFailed":
+    "Stopped waiting, but search cancellation could not be confirmed. Check the connection.",
+  "chat.composer.resize": "Drag vertically to resize; double-click or Home to reset",
+  "chat.composer.inline.image": "Image {index}",
+  "chat.composer.inline.failed": "Upload failed",
+  "chat.composer.inline.previewUnavailable": "This file is no longer available for preview.",
+  "chat.composer.inline.filePreview":
+    "Full preview is unavailable for this file. Download it to view. Text previews show up to 256 KiB.",
+  "chat.composer.inline.download": "Download file",
+  "chat.composer.optimize.button": "Optimize",
+  "chat.composer.optimize.cancel": "Cancel",
+  "chat.composer.optimize.title": "Optimize prompt",
+  "chat.composer.optimize.description":
+    "Clarify wording without guessing or adding requirements. Review before applying.",
+  "chat.composer.optimize.apply": "Apply",
+  "chat.composer.optimize.cancelFailed":
+    "Stopped waiting, but model cancellation could not be confirmed. Check the connection or restart the app.",
+  "chat.composer.optimize.failed":
+    "Optimization failed. Your original text is preserved. Please retry.",
+  "chat.composer.optimize.changed": "The text or references changed. This result was not applied.",
   "startPlan.recommendation.subagentDescription":
     "Your Start Plan has quota available for {model}. Switch this subagent’s model to the Start Plan?",
   "startPlan.recommendation.preferenceSaveFailed":
@@ -1968,8 +2006,50 @@ const enUS: Record<string, string> = {
   "settings.interfaceMode": "Interface mode",
   "settings.interfaceMode.office": "Office mode",
   "settings.interfaceMode.coding": "Coding mode",
+  "settings.interfaceMode.ide": "IDE mode",
   "settings.interfaceMode.description":
     "Office mode focuses on summaries and results. Coding mode shows commands, output, and code changes.",
+  "ideMode.addToChat": "Add to chat",
+  "ideMode.assistant": "IDE assistant",
+  "ideMode.diskChanged": "The file changed on disk. Your draft is preserved; reload to compare.",
+  "proto.ideContextUnsupported":
+    "This Host or Agent does not support the IDE assistant. Upgrade and retry. Your draft and code references are preserved.",
+  "ideMode.enter": "Enter IDE mode",
+  "ideMode.exit": "Exit IDE mode",
+  "ideMode.exitConfirm": "Discard unsaved changes and exit IDE mode?",
+  "ideMode.exitDescription":
+    "Editor tabs in all workspaces in this window will close. Unsaved changes will be lost.",
+  "ideMode.discard": "Discard changes",
+  "ideMode.cancel": "Cancel",
+  "ideMode.waitForSave": "Saving is in progress. Wait before exiting.",
+  "ideMode.reloadConfirm": "Discard local changes and reload this file?",
+  "ideMode.languageFailed": "Language support could not be loaded. Editing as plain text.",
+  "ideMode.openFiles": "Open files",
+  "ideMode.loading": "Loading…",
+  "ideMode.loadFailed": "The file could not be loaded. Retry to continue.",
+  "ideMode.loadCancelled": "Loading was cancelled. Retry to continue.",
+  "ideMode.operationFailed": "Operation failed: {message}",
+  "ideMode.legacyHost":
+    "This Host does not support safe editing. Showing a read-only preview; upgrade the Host to edit.",
+  "ideMode.readOnly": "This workspace is read-only.",
+  "ideMode.retry": "Retry",
+  "ideMode.saving": "Saving…",
+  "ideMode.savedStatus": "Saved",
+  "ideMode.toggle": "Toggle IDE mode",
+  "ideMode.editorTabCloseDirtyConfirm": "This file has unsaved changes. Close anyway?",
+  "ideMode.close": "Close",
+  "ideMode.save": "Save",
+  "ideMode.reload": "Reload",
+  "ideMode.saved": "Saved {path}",
+  "ideMode.saveFailed": "Save failed: {message}",
+  "ideMode.writeConflict":
+    "The file was modified by another program (or an AI task). Your changes were not saved.",
+  "ideMode.fileTooLarge": "Files over 256 KB cannot be edited in IDE mode yet.",
+  "ideMode.binaryFile": "Binary files cannot be edited in IDE mode yet.",
+  "ideMode.tabLimitReached": "Up to {limit} tabs can be open. Close some tabs first.",
+  "ideMode.loadingFile": "Loading file…",
+  "ideMode.emptyEditor": "Pick a file from the tree on the left to start editing",
+  "ideMode.unsavedIndicator": "Unsaved changes",
   "chat.toolCall.execute.conciseCompleted": "Ran a command",
   "chat.contextOptimization.started": "Optimizing conversation",
   "chat.contextOptimization.skipped": "No conversation optimization needed",

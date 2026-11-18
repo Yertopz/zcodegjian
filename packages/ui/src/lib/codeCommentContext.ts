@@ -12,9 +12,12 @@ export interface CodeCommentPayload extends CodeCommentRange {
   id?: string;
   workspacePath: string;
   workspaceIdentity?: string;
+  workspaceRemoteSessionId?: string;
+  targetWorkspaceKey?: string;
   sourcePath?: string;
   sourceTitle: string;
   selectedText: string;
+  hasUnsavedChanges?: boolean;
   comment: string;
   contextLabel?: string;
   commentLabel?: string;
@@ -127,7 +130,7 @@ function buildCodeCommentMarkdown(payload: CodeCommentPayload) {
       ? String(payload.startLine)
       : `${payload.startLine}-${payload.endLine}`;
 
-  return `## Comment\nFile: ${payload.sourcePath ?? payload.sourceTitle}\nSide: R\nLines: ${lineLabel}\nSelected text:\n\`\`\`\n${payload.selectedText.trim()}\n\`\`\`\nComment:\n${payload.comment.trim()}\n`;
+  return `## Comment\nFile: ${payload.sourcePath ?? payload.sourceTitle}\nSide: R\nLines: ${lineLabel}\nSelected text:\n\`\`\`\n${payload.selectedText}\n\`\`\`\nComment:\n${payload.comment.trim()}\n`;
 }
 
 function buildCodeCommentsBlock(attachments: readonly CodeCommentComposerAttachment[]) {
@@ -147,6 +150,41 @@ export function buildPromptWithCodeComments(
   attachments: readonly CodeCommentComposerAttachment[],
 ) {
   const content = text.trimEnd();
+  if (
+    attachments.some(
+      (item) =>
+        item.hasUnsavedChanges !== undefined ||
+        item.selectedText.includes("```") ||
+        item.selectedText.includes("## Comment"),
+    )
+  ) {
+    const data = attachments.map(
+      ({
+        workspacePath,
+        workspaceIdentity,
+        workspaceRemoteSessionId,
+        sourcePath,
+        sourceTitle,
+        startLine,
+        endLine,
+        selectedText,
+        comment,
+        hasUnsavedChanges,
+      }) => ({
+        workspacePath,
+        workspaceIdentity,
+        workspaceRemoteSessionId,
+        sourcePath,
+        sourceTitle,
+        startLine,
+        endLine,
+        selectedText,
+        comment,
+        hasUnsavedChanges,
+      }),
+    );
+    return `${content}${content ? "\n\n" : ""}# Code selections (v2):\n${JSON.stringify(data)}`;
+  }
   const commentsBlock = buildCodeCommentsBlock(attachments);
   if (!commentsBlock) {
     return content.trim();
@@ -218,7 +256,7 @@ function parseCodeCommentItem(
     sourceTitle: getSourceTitle(sourcePath),
     startLine: range.startLine,
     endLine: range.endLine,
-    selectedText: selectedText.trim(),
+    selectedText,
     comment,
   };
 }
@@ -230,6 +268,28 @@ export function parsePromptCodeComments(
     workspaceIdentity?: string;
   },
 ): ParsedCodeCommentPrompt {
+  const selectionBlock = /(?:^|\n\n)# Code selections \(v2\):\n([^\n]+)$/.exec(content);
+  if (selectionBlock) {
+    try {
+      const values: unknown = JSON.parse(selectionBlock[1]!);
+      if (
+        Array.isArray(values) &&
+        values.length &&
+        values.every((value) => isCodeCommentPayload({ ...options, ...value }))
+      ) {
+        return {
+          visibleContent: content.slice(0, selectionBlock.index).trimEnd(),
+          codeCommentAttachments: values.map((value, index) => ({
+            ...options,
+            ...value,
+            id: `parsed-selection-${index}`,
+          })),
+        };
+      }
+    } catch {
+      /* 非法尾块保持原文，不能丢掉用户输入。 */
+    }
+  }
   // 这里不能使用 multiline 的 `$`，否则非贪婪匹配会在第一行 `## Comment 1` 后提前停止，
   // 导致持久化消息无法解析回 comment 附件，只能把原始 markdown 暴露在聊天气泡里。
   const blockMatch = /(?:^|\n\n)# Code comments:\s*\n\n([\s\S]*?)\s*$/.exec(content);

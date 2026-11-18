@@ -316,6 +316,7 @@ export interface ConversationEditTarget {
     admittedDelivery?: "startNow" | "queue" | "guide";
     fallbackReasonCode?: string;
     mainAgentPrompt?: TurnInputIntentMetadata["mainAgentPrompt"];
+    ideContext?: import("@zcode/shared").IdeContext;
     modelSelection?: TurnInputIntentMetadata["modelSelection"];
     mode?: TurnInputIntentMetadata["mode"];
     planEnabled?: boolean;
@@ -2087,6 +2088,7 @@ export class ProductProjection {
                 ...(fact.modelSelection ? { modelSelection: fact.modelSelection } : {}),
                 ...(fact.mode ? { mode: fact.mode } : {}),
                 mainAgentPrompt: fact.mainAgentPrompt ?? null,
+                ideContext: fact.ideContext,
                 ...(fact.planEnabled !== undefined ? { planEnabled: fact.planEnabled } : {}),
                 ...(fact.provenance ? { provenance: fact.provenance } : {}),
               },
@@ -3394,6 +3396,7 @@ export class ProductProjection {
       modelSelection: payload.intent?.modelSelection ?? existing?.modelSelection,
       mode: payload.intent?.mode ?? existing?.mode,
       mainAgentPrompt: payload.intent?.mainAgentPrompt ?? existing?.mainAgentPrompt ?? null,
+      ideContext: payload.intent?.ideContext ?? existing?.ideContext,
       planEnabled: payload.intent?.planEnabled ?? existing?.planEnabled,
       sharedContextRefs: payload.intent?.sharedContextRefs ?? existing?.sharedContextRefs,
       provenance: payload.intent?.provenance ?? existing?.provenance,
@@ -3528,6 +3531,7 @@ export class ProductProjection {
           ...(queueItem.modelSelection ? { modelSelection: queueItem.modelSelection } : {}),
           ...(queueItem.mode ? { mode: queueItem.mode } : {}),
           mainAgentPrompt: queueItem.mainAgentPrompt ?? null,
+          ideContext: queueItem.ideContext,
           ...(queueItem.planEnabled !== undefined ? { planEnabled: queueItem.planEnabled } : {}),
           admissionSeq: queueItem.order.admissionSeq,
           admittedAt: queueItem.admittedAt,
@@ -3621,6 +3625,7 @@ export class ProductProjection {
                   : {}),
                 ...(item.intent?.mode ? { mode: item.intent.mode } : {}),
                 mainAgentPrompt: item.intent?.mainAgentPrompt ?? null,
+                ideContext: item.intent?.ideContext,
                 ...(item.intent?.planEnabled !== undefined
                   ? { planEnabled: item.intent.planEnabled }
                   : {}),
@@ -4086,7 +4091,8 @@ export class ProductProjection {
     const payload = event.payload as Record<string, unknown>;
     // 团队成员在事件里带 agentKind: "team"（core runner 按 profile.kind 写入）；
     // 行投影必须原样透出，否则 UI 只能凭 agentType 去猜，成员又被显示成子智能体。
-    const teamAgentKind = this.stringPayload(payload, "agentKind") === "team" ? ("team" as const) : undefined;
+    const teamAgentKind =
+      this.stringPayload(payload, "agentKind") === "team" ? ("team" as const) : undefined;
     const agentId = this.subagentAgentId(payload, event);
     const existing = this.findSubagentLifecycleRow(agentId, payload, event);
     if (existing) this.subagentRowIdByAgentId.set(agentId, existing.rowId);

@@ -33,7 +33,8 @@ test("全视图由面板覆盖实现，不替换对话 DOM", () => {
 
 test("关闭面板或切换 owner 会退出全视图", () => {
   assert.match(layoutSource, /dispatchSidePaneFullView\(\{ type: "panelHidden" \}\)/u);
-  assert.match(layoutSource, /dispatchSidePaneFullView\(\{ type: "ownerChanged"/u);
+  // prettier 折行：dispatch 调用可能跨行，容忍空白（语义不变）。
+  assert.match(layoutSource, /dispatchSidePaneFullView\(\{\s*type:\s*"ownerChanged"/u);
 });
 
 test("快捷键只在桌面注册，按钮与文案在位", () => {

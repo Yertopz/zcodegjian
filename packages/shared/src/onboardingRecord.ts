@@ -13,7 +13,12 @@ import { z } from "zod";
 /** occupation 用非空字符串而非枚举：职业列表会演进，旧记录不能因枚举收窄而校验失败。 */
 export const onboardingOccupationSchema = z.string().min(1).nullable();
 
-export const onboardingInterfaceModeSchema = z.enum(["coding", "office"]).nullable();
+// "ide" 是 IDE 模式（docs/development/187-ide-mode.md）加入后的第三档；
+// 引导页只让用户选 coding/office（新用户不推 IDE），但记录 schema 与
+// InterfaceMode 全集保持同步，避免 appendRecord 在 ide 模式下被 zod 拒收。
+export const onboardingInterfaceModeSchema = z
+  .enum(["coding", "office", "ide"])
+  .nullable();
 
 export const onboardingRecordEntrySchema = z.object({
   userId: z.string().min(1).nullable(),
@@ -81,21 +86,27 @@ export const onboardingRecordFileV2Schema = z.object({
  */
 export const onboardingRecordFileSchema = z
   .union([onboardingRecordFileV1Schema, onboardingRecordFileV2Schema])
-  .transform(
-    (file): z.output<typeof onboardingRecordFileV2Schema> =>
-      file.version === 1 ? { ...file, version: 2, decisions: [] } : file,
+  .transform((file): z.output<typeof onboardingRecordFileV2Schema> =>
+    file.version === 1 ? { ...file, version: 2, decisions: [] } : file,
   );
 
 export type OnboardingRecordEntry = z.infer<typeof onboardingRecordEntrySchema>;
 
 export type OnboardingDecision = z.infer<typeof onboardingDecisionSchema>;
 
-export type OnboardingRecordFileV1 = z.infer<typeof onboardingRecordFileV1Schema>;
+export type OnboardingRecordFileV1 = z.infer<
+  typeof onboardingRecordFileV1Schema
+>;
 
-export type OnboardingRecordFileV2 = z.infer<typeof onboardingRecordFileV2Schema>;
+export type OnboardingRecordFileV2 = z.infer<
+  typeof onboardingRecordFileV2Schema
+>;
 
 /** appendRecord 的入参：userId 由服务端（host）补全，调用方不传。 */
-export type OnboardingRecordEntryInput = Omit<OnboardingRecordEntry, "userId" | "uploadState">;
+export type OnboardingRecordEntryInput = Omit<
+  OnboardingRecordEntry,
+  "userId" | "uploadState"
+>;
 
 /** 解析后的形态恒为 v2（v1 已在 transform 里升级），调用方不需要分支处理版本。 */
 export type OnboardingRecordFile = z.output<typeof onboardingRecordFileSchema>;

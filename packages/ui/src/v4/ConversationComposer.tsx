@@ -1,3 +1,8 @@
+import { GenericFilePreview } from "@/prompt-editor/GenericFilePreview.js";
+import { PromptOptimizeButton } from "@/prompt-editor/PromptOptimizeButton.js";
+import { serializeInlineAttachments } from "@/prompt-editor/inlineAttachments.js";
+import { snapshotIdeContext } from "@/store/ideEditorStore.js";
+import { toast } from "@/components/ui/toast.js";
 /* oxlint-disable eslint(max-lines) -- composer 集中收口输入区 wiring（附件/草稿/历史/mention），拆分会打散收口粒度。 */
 /**
  * v4 会话 composer（composer parity）。
@@ -35,11 +40,7 @@ import {
   TID_V4_COMPOSER_KEEP_QUEUE_SEND,
   TID_V4_COMPOSER_SEND,
   TID_V4_PAUSED_QUEUE_SEND_DIALOG,
-  TID_V4_ATTACHMENT,
-  TID_V4_ATTACHMENT_UPLOAD_PROGRESS,
-  TID_V4_ATTACHMENT_UPLOAD_RETRY,
   TID_V4_STOP,
-  testId,
   type ZCodeProvider,
 } from "@zcode/shared";
 import type {
@@ -47,22 +48,10 @@ import type {
   ConversationSnapshot,
   SessionConfigState,
 } from "@zcode/shared/zcode-protocol-v4";
-import {
-  ArrowUpIcon,
-  ClipboardPenLineIcon,
-  InfoIcon,
-  RotateCcwIcon,
-  SquareIcon,
-  XIcon,
-} from "lucide-react";
+import { ArrowUpIcon, InfoIcon, SquareIcon, XIcon } from "lucide-react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { ChatErrorBanner, shouldSuppressChatErrorBanner } from "@/ChatErrorBanner.js";
-import {
-  Attachment,
-  Attachments,
-  AttachmentInfo,
-  AttachmentPreview,
-} from "@/components/ai-elements/attachments.js";
+
 import { Button } from "@/components/ui/button.js";
 import {
   Dialog,
@@ -90,12 +79,10 @@ import { logger } from "@/logger.js";
 import { runUserAction, startUserAction } from "@/lib/userActionTelemetry.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
-import { FileDisplayIcon, resolveFileDisplayDescriptor } from "@/lib/fileDisplay.js";
+
 import {
-  isImageChatComposerAttachment,
   isPdfChatComposerAttachment,
   isMediaChatComposerAttachment,
-  isVideoChatComposerAttachment,
   type ChatComposerAttachment,
 } from "@/lib/chatAttachments.js";
 import { resolveChatPlaceholderKey } from "@/lib/chatPlaceholder.js";
@@ -179,14 +166,6 @@ export interface ConversationComposerSendOptions {
 }
 
 export type ConversationComposerSendResult = "sent" | "blocked" | "confirmationRequired";
-function getComposerAttachmentTypeLabel(filename: string, mimeType: string): string {
-  const leaf = filename.split(/[\\/]/u).at(-1) ?? filename;
-  const dotIndex = leaf.lastIndexOf(".");
-  if (dotIndex > 0 && dotIndex < leaf.length - 1) {
-    return leaf.slice(dotIndex + 1).toUpperCase();
-  }
-  return (mimeType.split("/").at(-1) ?? mimeType).toUpperCase();
-}
 
 interface ExternalTextInsertRequest {
   requestId: number;
@@ -342,6 +321,8 @@ function arePromptHistoryEntriesEqual(left: readonly string[], right: readonly s
 }
 
 interface ConversationComposerProps {
+  /** SessionPane 按界面模式与对话角色派生；辅助对话保持独立提示词。 */
+  ideAssistantActive?: boolean;
   snapshot: ConversationSnapshot | null;
   /** 草稿 scope（sessionId；draft 态 null → "__draft__" scope）。 */
   sessionId?: string | null;
@@ -462,12 +443,8 @@ interface ConversationComposerProps {
   onDropTargetControllerChange?: (controller: ConversationDropTargetController | null) => void;
 }
 
-function formatAttachmentLineCount(attachment: ChatComposerAttachment, locale: string): string {
-  const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
-  return formatter.format(typeof attachment.lineCount === "number" ? attachment.lineCount : 0);
-}
-
 function ConversationComposerImpl({
+  ideAssistantActive = false,
   snapshot,
   sessionId = null,
   skillCatalogSessionId = sessionId,
@@ -526,6 +503,8 @@ function ConversationComposerImpl({
   const services = useOptionalServices();
   const draftScopeId = sessionId ?? V4_DRAFT_SCOPE_ROOT;
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
+  const [restoredInlineScope, setRestoredInlineScope] = useState<string | null>(null);
+  const inlineScopeKey = `${workspaceKey}\0${draftScopeId}`;
   const configPickerScopeKey = `${workspaceKey}\0${draftScopeId}`;
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -673,17 +652,12 @@ function ConversationComposerImpl({
     onDropTargetControllerChange?.(dropTargetController);
     return () => onDropTargetControllerChange?.(null);
   }, [dropTargetController, onDropTargetControllerChange]);
+  const [genericFilePreview, setGenericFilePreview] = useState<ChatComposerAttachment | null>(null);
   const [attachmentPreviewIndex, setAttachmentPreviewIndex] = useState(0);
   const [attachmentPreviewOpen, setAttachmentPreviewOpen] = useState(false);
   const [pdfAttachmentPreview, setPdfAttachmentPreview] =
     useState<ChatMediaAttachmentPreviewTarget | null>(null);
   const [pdfAttachmentPreviewOpen, setPdfAttachmentPreviewOpen] = useState(false);
-  const attachmentPreviewTitle = intl.formatMessage({
-    id: "chat.attachments.preview.open",
-  });
-  const videoAttachmentPreviewTitle = intl.formatMessage({
-    id: "chat.attachments.preview.openVideo",
-  });
   const hasAttachments = attachmentsApi.hasAttachments;
   const {
     contexts: webElementContexts,
@@ -848,6 +822,7 @@ function ConversationComposerImpl({
     onContextRemoved: handleCodeCommentRemoved,
     requestFocus: requestComposerFocus,
     scopeKey: `${workspaceKey}\0${draftScopeId}`,
+    workspaceKey,
   });
 
   useEffect(() => {
@@ -967,6 +942,7 @@ function ConversationComposerImpl({
       const api = inputApiRef.current;
       if (!api) return;
       restoreDraftInto(api);
+      setRestoredInlineScope(`${workspaceKey}\0${draftScopeId}`);
       // 草稿恢复后把光标交还输入框（切会话/切草稿/挂载）；连接中会话待可编辑后兑现。
       requestComposerFocus();
     };
@@ -1141,7 +1117,11 @@ function ConversationComposerImpl({
       // __draft__，下次新建任务又恢复。发送开始时冻结真正提交的 scope。
       const submittedDraft = snapshotDraftOfEditor();
       let cleanupRevision = contentRevisionRef.current;
-      const submission = createSubmissionFromComposer?.() ?? null;
+      const baseSubmission = createSubmissionFromComposer?.() ?? null;
+      const submission =
+        baseSubmission && ideAssistantActive
+          ? { ...baseSubmission, ideContext: snapshotIdeContext(workspaceKey) }
+          : baseSubmission;
       const submittedAttachmentIds = attachmentsApi.attachments.map((item) => item.id);
       if (
         (!trimmed &&
@@ -1232,12 +1212,15 @@ function ConversationComposerImpl({
         // 里没有任何东西解析它），唯一作用是驱动一个已被产品裁掉的 chip，代价却是把一个
         // share URL 塞进发给模型的正文。模型侧内容由隐藏的 shared_context 消息经
         // inputIntent.sharedContextRefs 注入，与正文无关。
-        const promptText = serializeComposerPromptContexts(trimmed, {
-          codeComments: currentCodeCommentContexts,
-          conversationSelections: currentConversationSelections,
-          webElements: currentWebElementContexts,
-          pptxElements: currentPptxElementReferences,
-        });
+        const promptText = serializeComposerPromptContexts(
+          serializeInlineAttachments(trimmed, submittedAttachmentIds),
+          {
+            codeComments: currentCodeCommentContexts,
+            conversationSelections: currentConversationSelections,
+            webElements: currentWebElementContexts,
+            pptxElements: currentPptxElementReferences,
+          },
+        );
         const contextAttachmentCount =
           countComposerPromptContexts({
             codeComments: currentCodeCommentContexts,
@@ -1270,7 +1253,11 @@ function ConversationComposerImpl({
         }
         const sendResult = await onSendText(promptText, {
           submission,
-          ...(requestedDelivery ? { requestedDelivery } : {}),
+          ...(requestedDelivery
+            ? { requestedDelivery }
+            : ideAssistantActive
+              ? { requestedDelivery: "queue" as const }
+              : {}),
           ...(heldQueueDisposition ? { heldQueueDisposition } : {}),
           ...(expectedHeldQueueItemIds ? { expectedHeldQueueItemIds } : {}),
           ...(readyAttachmentRefs.length > 0 ? { attachments: readyAttachmentRefs } : {}),
@@ -1335,6 +1322,8 @@ function ConversationComposerImpl({
         restoreSubmittedDraft();
         // 发送失败草稿保留在输入框（不清空），仅记录原因。
         logger.warn(`[v4-composer] 发送失败: ${String(error)}`);
+        if (String(error).includes("proto.ideContextUnsupported"))
+          toast(intl.formatMessage({ id: "proto.ideContextUnsupported" }));
         sendAction.fail({ failureStage: "composer_send" });
       } finally {
         pendingRef.current = false;
@@ -1347,6 +1336,8 @@ function ConversationComposerImpl({
       draftConfig,
       createSubmissionFromComposer,
       submissionReady,
+      ideAssistantActive,
+      workspaceKey,
       getCodeCommentContexts,
       modelSelectionView,
       onSendText,
@@ -1534,15 +1525,6 @@ function ConversationComposerImpl({
 
   // ── 附件预览网格 ──
   const composerAttachments = attachmentsApi.attachments;
-  const orderedComposerAttachments = useMemo(() => {
-    // 媒体组（图片/视频）优先、文件在后；组内保持添加顺序。
-    const media: (typeof composerAttachments)[number][] = [];
-    const files: (typeof composerAttachments)[number][] = [];
-    for (const attachment of composerAttachments) {
-      (isMediaChatComposerAttachment(attachment) ? media : files).push(attachment);
-    }
-    return [...media, ...files];
-  }, [composerAttachments]);
   const composerMediaPreviewItems = useMemo(
     () =>
       composerAttachments.flatMap((attachment) =>
@@ -1571,265 +1553,6 @@ function ConversationComposerImpl({
     }
     return (
       <div className="flex max-w-full flex-col items-start gap-2">
-        {composerAttachments.length > 0 ? (
-          <Attachments
-            variant="inline"
-            className="flex max-w-full flex-wrap gap-2"
-            data-composer-file-attachments-row="true"
-          >
-            {orderedComposerAttachments.map((attachment) => {
-              const isClipboardTextAttachment = attachment.sourceKind === "clipboard-text";
-              const isMediaAttachment = isMediaChatComposerAttachment(attachment);
-              const isVideoAttachment = isVideoChatComposerAttachment(attachment);
-              const isPdfAttachment = isPdfChatComposerAttachment(attachment);
-              const mediaType = attachment.objectUrl
-                ? attachment.mimeType
-                : attachment.mimeType.startsWith("image/")
-                  ? "application/octet-stream"
-                  : attachment.mimeType;
-              const canPreviewImageAttachment =
-                Boolean(attachment.objectUrl) && isImageChatComposerAttachment(attachment);
-              const canPreviewVideoAttachment = Boolean(attachment.objectUrl) && isVideoAttachment;
-              const canPreviewPdfAttachment = Boolean(attachment.objectUrl) && isPdfAttachment;
-              const fileDisplayDescriptor = resolveFileDisplayDescriptor(
-                attachment.localPath ?? attachment.filename,
-              );
-              const uploadStatusLabel =
-                attachment.uploadStatus === "uploading"
-                  ? intl.formatMessage(
-                      { id: "chat.attachments.upload.uploading" },
-                      { progress: String(attachment.uploadProgress) },
-                    )
-                  : attachment.uploadStatus === "failed"
-                    ? intl.formatMessage(
-                        { id: "chat.attachments.upload.failed" },
-                        { message: attachment.uploadError ?? "unknown" },
-                      )
-                    : intl.formatMessage({
-                        id: `chat.attachments.upload.${attachment.uploadStatus}`,
-                      });
-              const showUploadStatus =
-                !attachment.localZeroCopy &&
-                (attachment.uploadStatus !== "ready" || attachment.showComplete);
-              return (
-                <Attachment
-                  key={attachment.id}
-                  variant={isMediaAttachment ? "grid" : "inline"}
-                  data-composer-attachment-kind={
-                    isVideoAttachment
-                      ? "video"
-                      : isMediaAttachment
-                        ? "image"
-                        : isPdfAttachment
-                          ? "pdf"
-                          : "file"
-                  }
-                  data-testid={testId(TID_V4_ATTACHMENT, attachment.id)}
-                  data-upload-status={attachment.uploadStatus}
-                  className={
-                    isMediaAttachment
-                      ? "relative size-12 overflow-hidden rounded-lg bg-surface after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:border after:border-border after:content-['']"
-                      : "h-12 w-fit max-w-full min-w-0 gap-2 rounded-lg border border-border bg-surface p-1.5 pr-6 [--attachment-bg:var(--color-surface)] hover:bg-surface-hover"
-                  }
-                  data={{
-                    id: attachment.id,
-                    type: "file",
-                    filename: attachment.filename,
-                    ...(isClipboardTextAttachment
-                      ? {
-                          description: intl.formatMessage(
-                            {
-                              id: "chat.attachments.clipboardText.description",
-                            },
-                            {
-                              lineCount: formatAttachmentLineCount(attachment, locale),
-                            },
-                          ),
-                          displayName: intl.formatMessage({
-                            id: "chat.attachments.clipboardText",
-                          }),
-                          sourceKind: "clipboard-text" as const,
-                        }
-                      : {}),
-                    mediaType,
-                    url: attachment.objectUrl ?? "",
-                  }}
-                  onRemove={() => attachmentsApi.removeAttachment(attachment.id)}
-                  // 附件支持非图片格式，PDF 走独立 PdfViewer，
-                  // 其他文件展示类型图标和文件名，避免 doc 等普通文件被当成图片渲染失败。
-                  // 图片与视频统一按添加顺序进入发送前 gallery，
-                  // 保证同一组媒体可以连续导航。
-                  onOpen={
-                    canPreviewImageAttachment || canPreviewVideoAttachment
-                      ? () => {
-                          const previewIndex = composerMediaPreviewItems.findIndex(
-                            (item) => item.src === attachment.objectUrl,
-                          );
-                          if (previewIndex < 0) return;
-                          setAttachmentPreviewIndex(previewIndex);
-                          setAttachmentPreviewOpen(true);
-                        }
-                      : canPreviewPdfAttachment
-                        ? () => {
-                            setPdfAttachmentPreview({
-                              filename: attachment.filename,
-                              mediaType: "application/pdf",
-                              url: attachment.objectUrl,
-                            });
-                            setPdfAttachmentPreviewOpen(true);
-                          }
-                        : undefined
-                  }
-                  openLabel={
-                    canPreviewVideoAttachment
-                      ? videoAttachmentPreviewTitle
-                      : canPreviewImageAttachment
-                        ? attachmentPreviewTitle
-                        : canPreviewPdfAttachment
-                          ? intl.formatMessage({ id: "chat.attachments.preview.openPdf" })
-                          : undefined
-                  }
-                >
-                  <div
-                    className={cn(
-                      "relative shrink-0",
-                      isMediaAttachment ? "size-full" : "size-9 rounded-md bg-background",
-                    )}
-                  >
-                    <AttachmentPreview
-                      className={cn(
-                        isMediaAttachment ? "size-full rounded-none" : "size-9 rounded-md",
-                      )}
-                      fallbackIcon={
-                        isClipboardTextAttachment ? (
-                          <ClipboardPenLineIcon className="size-3.5 text-muted-foreground" />
-                        ) : (
-                          <FileDisplayIcon
-                            src={fileDisplayDescriptor.fileIconSrc}
-                            size={16}
-                            className="size-4 shrink-0"
-                          />
-                        )
-                      }
-                    />
-                    {showUploadStatus && isMediaAttachment ? (
-                      <span
-                        data-testid={testId(TID_V4_ATTACHMENT_UPLOAD_PROGRESS, attachment.id)}
-                        role={attachment.uploadStatus === "failed" ? "alert" : "status"}
-                        aria-label={uploadStatusLabel}
-                        className="absolute inset-0 grid place-items-center rounded-lg bg-background/85 text-[7px] font-semibold text-foreground"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          className="absolute inset-0 size-full -rotate-90 text-brand"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="stroke-border"
-                            cx="12"
-                            cy="12"
-                            fill="none"
-                            pathLength="100"
-                            r="9"
-                            strokeWidth="2"
-                          />
-                          <circle
-                            className={
-                              attachment.uploadStatus === "failed"
-                                ? "stroke-destructive"
-                                : "stroke-current"
-                            }
-                            cx="12"
-                            cy="12"
-                            fill="none"
-                            pathLength="100"
-                            r="9"
-                            strokeDasharray={`${attachment.uploadProgress} 100`}
-                            strokeLinecap="round"
-                            strokeWidth="2"
-                          />
-                        </svg>
-                        <span className="relative">
-                          {attachment.uploadStatus === "failed"
-                            ? "!"
-                            : `${attachment.uploadProgress}%`}
-                        </span>
-                      </span>
-                    ) : null}
-                  </div>
-                  {!isMediaAttachment ? (
-                    isClipboardTextAttachment ? (
-                      <AttachmentInfo className="max-w-48 text-ui-base text-foreground" />
-                    ) : (
-                      <div className="min-w-0 max-w-40 flex-1">
-                        <span
-                          className="block truncate text-ui-base font-medium text-foreground"
-                          title={attachment.filename}
-                        >
-                          {attachment.filename}
-                        </span>
-                        <span className="block truncate text-ui-sm font-normal text-foreground-subtle">
-                          {getComposerAttachmentTypeLabel(attachment.filename, attachment.mimeType)}
-                        </span>
-                      </div>
-                    )
-                  ) : null}
-                  {showUploadStatus && !isMediaAttachment ? (
-                    <span
-                      data-testid={testId(TID_V4_ATTACHMENT_UPLOAD_PROGRESS, attachment.id)}
-                      role={attachment.uploadStatus === "failed" ? "alert" : "status"}
-                      title={uploadStatusLabel}
-                      className={cn(
-                        "max-w-28 truncate text-ui-sm font-normal text-foreground-subtle",
-                        attachment.uploadStatus === "failed" && "text-destructive",
-                      )}
-                    >
-                      {attachment.uploadStatus === "uploading"
-                        ? `${attachment.uploadProgress}%`
-                        : uploadStatusLabel}
-                    </span>
-                  ) : null}
-                  {attachment.uploadStatus === "failed" ? (
-                    <button
-                      type="button"
-                      data-testid={testId(TID_V4_ATTACHMENT_UPLOAD_RETRY, attachment.id)}
-                      aria-label={intl.formatMessage({
-                        id: "chat.attachments.upload.retry",
-                      })}
-                      title={uploadStatusLabel}
-                      className="grid size-5 shrink-0 place-items-center rounded-md text-destructive hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        attachmentsApi.retryAttachment(attachment.id);
-                      }}
-                    >
-                      <RotateCcwIcon className="size-3" />
-                    </button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    data-composer-attachment-remove={attachment.id}
-                    aria-label={intl.formatMessage({
-                      id: "chat.attachments.remove",
-                    })}
-                    className="absolute right-0.5 top-0.5 z-20 size-3.5 rounded-full bg-primary p-0 text-primary-foreground opacity-0 transition-opacity hover:bg-primary/80 hover:text-primary-foreground group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      attachmentsApi.removeAttachment(attachment.id);
-                    }}
-                  >
-                    <XIcon className="size-2.5" />
-                  </Button>
-                </Attachment>
-              );
-            })}
-          </Attachments>
-        ) : null}
         {codeCommentContexts.length > 0 ||
         webElementContexts.length > 0 ||
         pptxElementReferences.length > 0 ||
@@ -1864,7 +1587,6 @@ function ConversationComposerImpl({
       </div>
     );
   }, [
-    attachmentPreviewTitle,
     attachmentsApi,
     clearCodeCommentContexts,
     clearConversationSelectionReferences,
@@ -1873,7 +1595,6 @@ function ConversationComposerImpl({
     codeCommentContexts,
     composerAttachments,
     composerMediaPreviewItems,
-    orderedComposerAttachments,
     intl,
     locale,
     removeCodeCommentContext,
@@ -2023,18 +1744,27 @@ function ConversationComposerImpl({
           onSwitchMode={onSwitchMode}
         />
         {/* 主 Agent 提示词选择属于权限相邻的会话控制；放在工具栏可省下输入框上方整行空间。 */}
-        <MainAgentPromptSelector
-          workspacePath={workspacePath}
-          workspaceIdentity={workspaceIdentity}
-          sessionId={sessionId}
-          selectedId={
-            draftMode
-              ? draftConfig?.mainAgentPromptId
-              : (snapshot?.config.mainAgentPromptId ?? null)
-          }
-          onSelect={onMainAgentPromptSelect}
-          disabled={disabled}
-        />
+        {ideAssistantActive ? (
+          <span
+            data-testid="ide-assistant-label"
+            className="px-2 text-ui-sm text-foreground-subtle"
+          >
+            {intl.formatMessage({ id: "ideMode.assistant" })}
+          </span>
+        ) : (
+          <MainAgentPromptSelector
+            workspacePath={workspacePath}
+            workspaceIdentity={workspaceIdentity}
+            sessionId={sessionId}
+            selectedId={
+              draftMode
+                ? draftConfig?.mainAgentPromptId
+                : (snapshot?.config.mainAgentPromptId ?? null)
+            }
+            onSelect={onMainAgentPromptSelect}
+            disabled={disabled}
+          />
+        )}
         {/* 附件画廊重构曾整段覆盖 leadingActions，误删 CUA 常驻入口。
             入口自身继续负责平台、远程与设置可见性，不在 composer 重复判定。 */}
         <V4ComposerCuaEntry
@@ -2054,6 +1784,12 @@ function ConversationComposerImpl({
     [
       activeConfigPicker,
       canStop,
+      ideAssistantActive,
+      intl,
+      draftMode,
+      sessionId,
+      onMainAgentPromptSelect,
+      snapshot?.config.mainAgentPromptId,
       disabled,
       draftConfig,
       handleConfigPickerOpenChange,
@@ -2152,6 +1888,50 @@ function ConversationComposerImpl({
           // 仍由 MentionPlugin 保留兼容触发，但不在 + 菜单重复展示。
           showMentionButton
           topContent={topContentNode}
+          resizable
+          inlineAttachments={{
+            scopeKey: inlineScopeKey,
+            ready: restoredInlineScope === inlineScopeKey,
+            items: composerAttachments,
+            remove: attachmentsApi.removeAttachment,
+            retry: attachmentsApi.retryAttachment,
+            openFile: (path, title) =>
+              onOpenCodeViewer?.({
+                type: "file",
+                path,
+                title,
+                workspacePath,
+                workspaceIdentity,
+                workspaceRemoteSessionId: remoteSessionId,
+              }),
+            open: (id) => {
+              const item = composerAttachments.find((candidate) => candidate.id === id);
+              if (!item) return;
+              const index = composerMediaPreviewItems.findIndex(
+                (entry) => entry.src === item.objectUrl,
+              );
+              if (index >= 0) {
+                setAttachmentPreviewIndex(index);
+                setAttachmentPreviewOpen(true);
+              } else if (isPdfChatComposerAttachment(item) && item.objectUrl) {
+                setPdfAttachmentPreview({
+                  filename: item.filename,
+                  mediaType: item.mimeType,
+                  url: item.objectUrl,
+                });
+                setPdfAttachmentPreviewOpen(true);
+              } else if (item.localPath && onOpenCodeViewer)
+                onOpenCodeViewer({
+                  type: "file",
+                  title: item.filename,
+                  path: item.localPath,
+                  workspacePath,
+                  workspaceIdentity,
+                  workspaceRemoteSessionId: remoteSessionId,
+                });
+              else setGenericFilePreview(item);
+            },
+          }}
           attachmentAction={attachmentAction}
           inputTestId={TID_V4_COMPOSER_INPUT}
           inputApiRef={inputApiRef}
@@ -2162,6 +1942,17 @@ function ConversationComposerImpl({
           appSlashCommands={appSlashCommands}
           enableMentionPanel
           leadingActions={leadingActionsNode}
+          headerAction={
+            <PromptOptimizeButton
+              inputApiRef={inputApiRef}
+              scopeKey={inlineScopeKey}
+              workspacePath={workspacePath}
+              workspaceIdentity={workspaceIdentity}
+              remoteSessionId={remoteSessionId}
+              selection={createSubmissionFromComposer?.()?.modelSelection}
+              disabled={disabled || !text.replace(/\[[^\]\n]+\]\(attachment:[^\s)]+\)/g, "").trim()}
+            />
+          }
           submitControl={submitControlNode}
           className="p-0"
           onChange={handleEditorChange}
@@ -2182,6 +1973,20 @@ function ConversationComposerImpl({
           {contextHeader}
         </div>
       ) : null}
+      <Dialog
+        open={genericFilePreview !== null}
+        onOpenChange={(open) => {
+          if (!open) setGenericFilePreview(null);
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{genericFilePreview?.filename}</DialogTitle>
+            <DialogDescription>{genericFilePreview?.mimeType}</DialogDescription>
+          </DialogHeader>
+          <GenericFilePreview attachment={genericFilePreview} />
+        </DialogContent>
+      </Dialog>
       <ImagePreviewDialog
         initialIndex={attachmentPreviewIndex}
         items={composerMediaPreviewItems}

@@ -78,6 +78,7 @@ export interface ToolExecutorOptions {
   agentTelemetry?: AgentExecutionTelemetryPort;
   agentTelemetryActorKind?: AgentTelemetryActorKind;
   registry: ToolRegistry;
+  isToolAllowed?: (name: string) => boolean;
   permissionService: PermissionService;
   permissionBroker?: PermissionBrokerPort;
   emitEvent: (event: SessionEvent) => Promise<void>;
@@ -201,6 +202,7 @@ export interface ToolExecutorDeps {
   agentTelemetry?: AgentExecutionTelemetryPort;
   agentTelemetryActorKind?: AgentTelemetryActorKind;
   registry: ToolRegistry;
+  isToolAllowed?: (name: string) => boolean;
   permissionService: PermissionService;
   permissionBroker: PermissionBrokerPort;
   emitEvent: (event: SessionEvent) => Promise<void>;

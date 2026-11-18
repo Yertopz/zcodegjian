@@ -6,8 +6,9 @@ interface DelayPlan {
   ackMs: number;
   consumed?: boolean;
   ackReleased?: boolean;
+  rejectBeforeSend?: boolean;
 }
-/** 仅 E2E build 的公开传输 seam 故障注入；只延迟真实命令/ACK，不伪造事件。 */
+/** 仅 E2E build 的传输故障注入；延迟或在发送前拒绝，不伪造 accepted/event。 */
 export async function sendWithConversationDelayE2E(
   send: () => Promise<CommandAck>,
 ): Promise<CommandAck> {
@@ -18,6 +19,7 @@ export async function sendWithConversationDelayE2E(
   const plan = shouldExposeE2EStoreBridge() ? host?.__zcodeTransportDelayE2E : undefined;
   if (!plan || plan.consumed) return send();
   plan.consumed = true;
+  if (plan.rejectBeforeSend) throw new Error("IDE_E2E_TRANSPORT_REJECTED");
   const delay = (ms: number) =>
     new Promise<void>((resolve) =>
       setTimeout(resolve, Number.isFinite(ms) ? Math.min(10000, Math.max(0, ms)) : 0),

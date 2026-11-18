@@ -29,6 +29,7 @@ export function buildPersistedConversationInputIntent(
     // 解析后的 canonical objective，持久化必须优先使用它以保证 live/cold 等价。
     text: intent.text ?? text,
     mainAgentPrompt: intent.mainAgentPrompt ?? null,
+    ideContext: intent.ideContext,
     attachments: intent.attachmentRefs ?? [],
     ...(intent.modelSelection ? { modelSelection: intent.modelSelection } : {}),
     ...(intent.mode ? { mode: intent.mode } : {}),

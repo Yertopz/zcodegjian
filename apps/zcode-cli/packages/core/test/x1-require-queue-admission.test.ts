@@ -23,6 +23,7 @@ interface Captured {
 
 function makeStub(captured: Captured, extra?: Partial<AgentRuntimeInternal>) {
   return {
+    config: {},
     // 只实现 requireQueue 分支会触到的方法：该分支必须不看 busy 状态。
     hasActiveOrQueuedTurnWork: () => true,
     activeTurn: { turnId: "running", steerable: true },
@@ -34,7 +35,12 @@ function makeStub(captured: Captured, extra?: Partial<AgentRuntimeInternal>) {
       captured.input = request.input;
       captured.delivery = request.delivery;
       captured.intent = request.intent;
-      return { kind: "queued" as const, pendingInputId: "pending-1", queueLength: 1, turnId: "queued-turn" };
+      return {
+        kind: "queued" as const,
+        pendingInputId: "pending-1",
+        queueLength: 1,
+        turnId: "queued-turn",
+      };
     },
     ...extra,
   } as unknown as AgentRuntimeInternal;
@@ -61,12 +67,13 @@ const INTENT: TurnInputIntentMetadata = {
 
 test("requireQueue：无条件入队，delivery=queue，intent 的 admittedDelivery 落 queue", async () => {
   const captured: Captured = {};
-  const receipt = await admitPrompt.call(
-    makeStub(captured),
-    "edited text",
-    undefined,
-    { requireQueue: true, inputId: "in-1", queryId: "q-1" as never, intent: INTENT, commandKind: "sendText" },
-  );
+  const receipt = await admitPrompt.call(makeStub(captured), "edited text", undefined, {
+    requireQueue: true,
+    inputId: "in-1",
+    queryId: "q-1" as never,
+    intent: INTENT,
+    commandKind: "sendText",
+  });
   assert.equal(receipt.kind, "queued");
   assert.equal(captured.input, "edited text");
   assert.equal(captured.delivery, "queue");
@@ -79,12 +86,11 @@ test("requireQueue：无条件入队，delivery=queue，intent 的 admittedDeliv
 
 test("requireQueue：会话正处于 busy 且有 steerable turn，仍只入队、不 steer、不启动", async () => {
   const captured: Captured = {};
-  const receipt = await admitPrompt.call(
-    makeStub(captured),
-    "edited text",
-    undefined,
-    { requireQueue: true, inputId: "in-2", commandKind: "sendText" },
-  );
+  const receipt = await admitPrompt.call(makeStub(captured), "edited text", undefined, {
+    requireQueue: true,
+    inputId: "in-2",
+    commandKind: "sendText",
+  });
   // stub 的 hasActiveOrQueuedTurnWork 恒真、activeTurn 恒在：若分支去参考 busy，就会走 steer/reject。
   assert.equal(receipt.kind, "queued");
   assert.equal(captured.delivery, "queue");
@@ -93,12 +99,10 @@ test("requireQueue：会话正处于 busy 且有 steerable turn，仍只入队�
 
 test("非 requireQueue 的普通发送仍走 busy 判定路径（queueDelivery 缺省时入队）", async () => {
   const captured: Captured = {};
-  const receipt = await admitPrompt.call(
-    makeStub(captured),
-    "plain text",
-    undefined,
-    { inputId: "in-3", commandKind: "sendText" },
-  );
+  const receipt = await admitPrompt.call(makeStub(captured), "plain text", undefined, {
+    inputId: "in-3",
+    commandKind: "sendText",
+  });
   assert.equal(receipt.kind, "queued");
   // 普通路径的 delivery 由 busy 分支决定（queueDelivery 无值 → queue）。
   assert.equal(captured.delivery, "queue");

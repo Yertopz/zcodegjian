@@ -1,10 +1,9 @@
-import type { CSSProperties, KeyboardEvent, RefCallback } from "react";
+import { useMemo, type CSSProperties, type KeyboardEvent, type RefCallback } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { AlertCircle, Files, LoaderCircle } from "lucide-react";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
   areWorkspaceFilePathsEqual,
-  getWorkspaceDirectoryGitStatuses,
   getWorkspaceFileGitStatus,
   isWorkspaceFileGitIgnored,
   type WorkspaceFileGitStatus,
@@ -18,8 +17,10 @@ import type {
   WorkspaceFileTreeContextMenuLabels,
   WorkspaceFileTreeEditorState,
 } from "@/workspace-file-tree/types.js";
-
-export const WORKSPACE_FILE_TREE_MASK_OFFSET_PROPERTY = "--workspace-file-tree-mask-offset";
+import {
+  WORKSPACE_FILE_TREE_MASK_OFFSET_PROPERTY,
+  createWorkspaceDirectoryGitStatusLookup,
+} from "@/workspace-file-tree/performance.js";
 
 function getWorkspaceFileTreeListMaskStyle({
   stickyFolderCount,
@@ -95,6 +96,10 @@ export function WorkspaceFileTreeList({
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
 }) {
   const { intl } = useZCodeIntl();
+  const getDirectoryGitStatuses = useMemo(
+    () => createWorkspaceDirectoryGitStatusLookup(gitStatusByPath),
+    [gitStatusByPath],
+  );
   if (rootError) {
     return (
       <WorkspaceFileTreeNotice
@@ -124,9 +129,7 @@ export function WorkspaceFileTreeList({
         getWorkspaceFileGitStatus(gitStatusByPath, row.path) ??
         (isWorkspaceFileGitIgnored(ignoredPathSet, row.path) ? "ignored" : null)
       }
-      directoryGitStatuses={
-        row.type === "directory" ? getWorkspaceDirectoryGitStatuses(gitStatusByPath, row.path) : []
-      }
+      directoryGitStatuses={row.type === "directory" ? getDirectoryGitStatuses(row.path) : []}
       gitStatusLabelByStatus={gitStatusLabelByStatus}
       contextMenuLabels={contextMenuLabels}
       canOpenLocalFileManager={editorState.canOpenLocalFileManager}

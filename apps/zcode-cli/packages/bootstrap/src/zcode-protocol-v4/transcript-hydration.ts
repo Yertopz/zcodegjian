@@ -397,6 +397,7 @@ function inputIntentOfMessage(message: MessageWithParts): TurnInputIntentMetadat
       ...(value.modelSelection ? { modelSelection: value.modelSelection } : {}),
       ...(value.mode ? { mode: value.mode } : {}),
       mainAgentPrompt: value.mainAgentPrompt ?? null,
+      ideContext: value.ideContext,
       ...(value.planEnabled !== undefined ? { planEnabled: value.planEnabled } : {}),
       admissionSeq: value.order.admissionSeq,
       admittedAt: value.admittedAt,

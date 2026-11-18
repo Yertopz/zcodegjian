@@ -9,6 +9,7 @@ import {
 import { buildPersistedConversationInputIntent } from "../src/runtime/methods/input-intent-persistence.js";
 import type { AgentRuntimeInternal } from "../src/runtime/internal.js";
 import { AgentRuntime } from "../src/runtime/agent-runtime.js";
+import { MAIN_ASSISTANT_PROMPT } from "@zcode/shared";
 import {
   createInMemorySessionEventStore,
   createSessionId,
@@ -80,8 +81,9 @@ test("模型 system messages 包含追加正文、保留默认行为和环境；
 });
 
 test("追加提示词拼在正文下一段注入，且顺序固定为正文在前", () => {
-  const build = (mainAgentPrompt: ConstructorParameters<typeof ContextBuilder>[0]["mainAgentPrompt"]) =>
-    new ContextBuilder({ workingDirectory: envInfo.cwd, envInfo, mainAgentPrompt }).build();
+  const build = (
+    mainAgentPrompt: ConstructorParameters<typeof ContextBuilder>[0]["mainAgentPrompt"],
+  ) => new ContextBuilder({ workingDirectory: envInfo.cwd, envInfo, mainAgentPrompt }).build();
   const withAppend = build({
     ...prompt,
     appendPrompt: "APPEND_MARKER 每段结论先给一句话摘要",
@@ -225,6 +227,14 @@ test("真实主 Agent loop 在最终 provider 请求中使用本轮快照，忙�
   assert.equal(admission.kind, "started");
   if (admission.kind === "started") await admission.completion;
   assert.match(JSON.stringify(requests[0]!.messages), /CUSTOM_MAIN_PROMPT_MARKER/);
+  assert.ok(
+    requests[0]!.messages.some(
+      (message) =>
+        message.role === "system" &&
+        typeof message.content === "string" &&
+        message.content.includes(MAIN_ASSISTANT_PROMPT),
+    ),
+  );
   await runtime.executeTurn("next", undefined, {
     intent: {
       mainAgentPrompt: { ...prompt, prompt: "UPDATED_PROMPT_MARKER" },

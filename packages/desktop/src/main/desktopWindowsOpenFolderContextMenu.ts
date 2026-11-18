@@ -83,6 +83,8 @@ export async function installWindowsOpenFolderContextMenu(options: {
   locale: Locale;
   logger: Logger;
 }): Promise<void> {
+  // 隔离验收不能改写用户的 Explorer 入口，测试启动参数也不是可持久化的应用入口。
+  if (process.env.ZCODE_E2E_RUN_ID?.trim()) return;
   if (options.platform !== "win32") {
     return;
   }

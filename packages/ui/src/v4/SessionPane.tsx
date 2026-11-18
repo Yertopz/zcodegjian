@@ -3,7 +3,7 @@ import { resolveSelectionSideInheritedModel } from "@/lib/selectionSideInherited
 import { useStartPlanRecommendation } from "@/hooks/useStartPlanRecommendation.js";
 import type { SessionCreateSource } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- SessionPane 是单 pane 竖切的命令编排收口（订阅/发送/停止/fork/edit/retry/queue/slash 全集），与旧 ChatView 同粒度；HEAD 已超限（693 行计数），拆散命令组会打散 dispatchCommand/snapshotRef 的闭包纪律。 */
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
+import { useIsIdeMode, useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import {
   useCallback,
   useEffect,
@@ -199,6 +199,7 @@ import {
   isSessionPluginCatalogReady,
 } from "@/v4/pluginReferenceIconProjection.js";
 import { shouldResyncForStaleAuthority } from "@/v4/staleAuthorityRecovery.js";
+import { queryFileChangesWithRecovery } from "@/v4/fileChangesQuery.js";
 import { createCommandEnvelope } from "@/v4/commandFactory.js";
 import { createConfigCommandBarrier } from "@/v4/configCommandBarrier.js";
 import { recordV4CommandAck } from "@/v4/commandAckObservability.js";
@@ -556,6 +557,9 @@ export function SessionPane({
   const { conversationShareService, modelSelectionService, zcodeSessionService, zcodeTaskService } =
     useServices();
   const { intl, locale } = useZCodeIntl();
+  const interfaceIsIde = useIsIdeMode();
+  // IDE 布局覆盖整个窗口，但专用助手只约束主对话，不能锁住辅助会话。
+  const ideAssistantActive = interfaceIsIde && !selectionSideChat;
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
   const baseWorkspaceServices = useBaseWorkspaceServices();
   // 多智能体群聊数据源：团队开关（设置域）与已启用成员 profiles（子智能体域）。
@@ -1470,12 +1474,14 @@ export function SessionPane({
       // 虚拟行卸载会丢失行内 state，复挂载后预览卡片会重复拉取包含完整
       // patch 的 fileChanges；缓存必须放在 SessionPane，才能与文件变更面板共享同一请求。
       let request: Promise<V4ConversationFileChangesResult>;
-      request = fileChanges({
-        sessionId,
-        target,
-        baseRevision: current.revision,
-        baseLogEpoch: current.logEpoch,
-      }).then(
+      request = queryFileChangesWithRecovery(current, lease?.store, (authority) =>
+        fileChanges({
+          sessionId,
+          target,
+          baseRevision: authority.revision,
+          baseLogEpoch: authority.logEpoch,
+        }),
+      ).then(
         (result) => {
           // 运行中成功结果仍可能只是当前 revision 的局部 diff；只共享
           // in-flight Promise，settled 后删除，避免最终卡片复用早期结果。
@@ -2007,6 +2013,7 @@ export function SessionPane({
   // 多智能体群聊视图：会话主提示词为「多智能体模式」或团队开关开启时激活。
   // 成员名单来自已启用 agent profiles（含 CreateAgent 新建成员），键为小写名字。
   const groupChat = useGroupChatContext({
+    ideAssistantActive,
     sessionConfigMainAgentPromptId:
       snapshot?.sessionId === sessionId ? snapshot?.config.mainAgentPromptId : undefined,
     multiAgentEnabled: multiAgentSettings?.enabled,
@@ -2393,9 +2400,11 @@ export function SessionPane({
       const readyAttachments = options?.attachments ?? [];
       const sharedContextRefs = options?.sharedContextRefs;
       const contextAttachmentCount = options?.contextAttachmentCount ?? 0;
-      let slashCommand = parseV4VisibleSlashCommand(text, readyAttachments, {
-        contextAttachmentCount,
-      });
+      let slashCommand = submission?.ideContext
+        ? null
+        : parseV4VisibleSlashCommand(text, readyAttachments, {
+            contextAttachmentCount,
+          });
 
       // `/plan` 首版只消费纯文本。必须在 provider readiness 和任何 command admission 之前
       // 拒绝附件/context，否则原始 `/plan ...` 会退化成普通 prompt，既绕过产品边界又清空草稿。
@@ -2430,7 +2439,7 @@ export function SessionPane({
               .groupedDraftTask
           : null;
       const selectionSideSlashCommand =
-        sessionId && (appSlashCommands?.length ?? 0) > 0
+        !submission?.ideContext && sessionId && (appSlashCommands?.length ?? 0) > 0
           ? parseSelectionSideSlashCommand(text, readyAttachments, {
               contextAttachmentCount,
               enabledCommandNames: availableSelectionSideSlashCommandNames,
@@ -4268,6 +4277,7 @@ export function SessionPane({
   // 若仍创建 composer，会让用户误以为可以直接向 child session 继续输入。
   const composerNode = readOnly ? null : (
     <ConversationComposer
+      ideAssistantActive={ideAssistantActive}
       key="conversation-composer"
       // Snapshot 仍服务用量、路由与运行态；工具栏的 mode/model 只读下方 Composer Draft。
       snapshot={snapshot}

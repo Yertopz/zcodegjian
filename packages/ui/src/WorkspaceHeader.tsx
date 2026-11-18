@@ -16,6 +16,7 @@ import {
   type WorkspaceHeaderState,
   WorkspaceHeaderTitleSection,
 } from "@/WorkspaceHeaderSections.js";
+import { IdeModeToggle } from "@/ide-mode/IdeModeToggle.js";
 import type { WorkspaceHeaderVariant } from "@/WorkspaceHeaderSections/shared.js";
 
 export function WorkspaceHeader({
@@ -159,47 +160,51 @@ export function WorkspaceHeader({
           headerWindowControlsPaddingClass,
         )}
       >
-        {variant === "task" ? (
-          <WorkspaceHeaderTitleSection
-            variant={variant}
-            readOnlyReason={readOnlyReason}
-            workspaceAbsPath={workspaceAbsPath}
-            remoteSessionId={remoteSessionId}
-            workspaceIdentity={workspaceIdentity}
-            remoteTarget={remoteTarget}
-            localWorkspacePath={localWorkspacePath}
-            projectName={projectName}
-            activeTaskTitle={activeTaskTitle}
-            activeTaskChangeSummary={activeTaskChangeSummary}
-            activeTaskId={activeTaskId}
-            activeTraceId={activeTraceId}
-            activeSessionId={activeSessionId}
-            activeTaskProvider={activeTaskProvider}
-            resolvedActiveTaskMeta={resolvedActiveTaskMeta}
-            gitSummary={gitSummary}
-            gitDirtyFileCount={gitDirtyFileCount}
-            sessionLogPath={sessionLogPath}
-            nativeSessionLogProvider={nativeSessionLogProvider}
-            nativeSessionLogPath={nativeSessionLogPath}
-            nativeSessionLogExists={nativeSessionLogExists}
-            nativeSessionLogLoading={nativeSessionLogLoading}
-            workspaceHeaderState={workspaceHeaderState}
-            isMacDesktop={isMacDesktop}
-            isMacFullscreen={isMacFullscreen}
-            isWindowsDesktop={isWindowsDesktop}
-            simplifyForNarrowRemote={simplifyForNarrowRemote}
-            // 窄屏下头部不显示终端按钮，由同一行的 ⋯ 菜单提供带文字标签的等价入口。
-            isTerminalOpen={isTerminalOpen}
-            onToggleTerminal={onToggleTerminal}
-            selectedEditor={selectedEditor}
-            onReloadSession={onReloadSession}
-            reloadSessionDisabled={reloadSessionDisabled}
-            reloadSessionPending={reloadSessionPending}
-            onRefreshGit={onRefreshGit}
-          />
-        ) : (
-          <div className="min-w-0 flex-1" aria-hidden="true" />
-        )}
+        <div className="flex min-w-0 items-center gap-2">
+          {/* IDE 入口属于工作区，不能放在仅已有任务渲染的标题区，否则新任务页无入口。 */}
+          <div className="shrink-0 [app-region:no-drag]">
+            <IdeModeToggle />
+          </div>
+          {variant === "task" ? (
+            <WorkspaceHeaderTitleSection
+              variant={variant}
+              readOnlyReason={readOnlyReason}
+              workspaceAbsPath={workspaceAbsPath}
+              remoteSessionId={remoteSessionId}
+              workspaceIdentity={workspaceIdentity}
+              remoteTarget={remoteTarget}
+              localWorkspacePath={localWorkspacePath}
+              projectName={projectName}
+              activeTaskTitle={activeTaskTitle}
+              activeTaskChangeSummary={activeTaskChangeSummary}
+              activeTaskId={activeTaskId}
+              activeTraceId={activeTraceId}
+              activeSessionId={activeSessionId}
+              activeTaskProvider={activeTaskProvider}
+              resolvedActiveTaskMeta={resolvedActiveTaskMeta}
+              gitSummary={gitSummary}
+              gitDirtyFileCount={gitDirtyFileCount}
+              sessionLogPath={sessionLogPath}
+              nativeSessionLogProvider={nativeSessionLogProvider}
+              nativeSessionLogPath={nativeSessionLogPath}
+              nativeSessionLogExists={nativeSessionLogExists}
+              nativeSessionLogLoading={nativeSessionLogLoading}
+              workspaceHeaderState={workspaceHeaderState}
+              isMacDesktop={isMacDesktop}
+              isMacFullscreen={isMacFullscreen}
+              isWindowsDesktop={isWindowsDesktop}
+              simplifyForNarrowRemote={simplifyForNarrowRemote}
+              // 窄屏下头部不显示终端按钮，由同一行的 ⋯ 菜单提供带文字标签的等价入口。
+              isTerminalOpen={isTerminalOpen}
+              onToggleTerminal={onToggleTerminal}
+              selectedEditor={selectedEditor}
+              onReloadSession={onReloadSession}
+              reloadSessionDisabled={reloadSessionDisabled}
+              reloadSessionPending={reloadSessionPending}
+              onRefreshGit={onRefreshGit}
+            />
+          ) : null}
+        </div>
         <WorkspaceHeaderActionSection
           variant={variant}
           activeTaskId={activeTaskId}

@@ -51,6 +51,9 @@
 | [多智能体（Agent Team）](development/184-agent-team.md)                           | 团队模式开关、`@` 次数上限、创建者与 `CreateAgent` 的落点     |
 | [供应商级出口代理](development/185-provider-egress-proxy.md)                      | 按供应商走 SOCKS5 / HTTP 出网、优先级与已知缺口               |
 | [Codex 连接](development/186-codex-login.md)                                      | `zcode login codex`：凭据复用、模型清单与逐连接代理           |
+| [IDE 模式](development/187-ide-mode.md)                                           | 桌面编辑、文件联动、代码引用与每轮专用助手                    |
+| [输入框内嵌附件与提示词优化](development/188-composer-inline-attachments.md)      | 正文附件、双击预览、拖动高度与保守改写                        |
+| [主工作区与会话组件](development/workspace-shadcn-migration.md)                   | 共享 shadcn 组件与工作区交互约束                              |
 | [欠账台账（精简）](development/backlog.md)                                        | 长期方向与「有意不做」；全量未完成项在维护者私有工作区        |
 
 ### `community/` — 社区

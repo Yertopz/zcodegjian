@@ -260,7 +260,7 @@ async function sendText(
     const intent = submissionIntent({
       text: payload.text,
       requestedDelivery:
-        payload.requestedDelivery ??
+        (payload.ideContext && !forceStartNow ? "queue" : payload.requestedDelivery) ??
         (routingMode === "guide" ? "guide" : routingMode === "enqueue" ? "queue" : "startNow"),
       ...(routingMode === "guide" && attachments?.length
         ? { fallbackReasonCode: "guide.attachmentsUnsupported" }

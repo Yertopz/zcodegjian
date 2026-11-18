@@ -103,6 +103,7 @@ async function createSession(
       const intent = inputIntentMetadata(envelope, {
         text: payload.firstInput.text,
         mainAgentPrompt: durableAdmission?.mainAgentPrompt ?? null,
+        ideContext: payload.firstInput.ideContext,
         requestedDelivery: "startNow",
         attachmentRefs: payload.firstInput.attachments,
         ...resolveSubmittedExecutionState(record, payload.firstInput),

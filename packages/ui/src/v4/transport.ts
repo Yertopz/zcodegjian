@@ -155,6 +155,8 @@ export interface ConversationTransport {
 export interface ConversationAttachmentReadParams {
   sessionId: string;
   ref: string;
+  /** 普通文档走 userInput 附件授权，必须同时提供稳定 target 和原始下标。 */
+  purpose?: "document";
   /** 仅用于决定是否查询 Desktop local video source；最终 MIME 仍由 CLI 权威返回。 */
   mediaType?: string;
   /** 新 row 有稳定 identity；旧 snapshot 缺失时保持 ref-only 兼容。 */
