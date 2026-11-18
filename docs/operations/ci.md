@@ -10,7 +10,9 @@
 
 `bundle:desktop` 接收 `--publish <never|always|onTag|onTagOrDraft>` 和等号形式，严格校验后将原值传给最终 electron-builder；未指定时保留现有发布默认值。缺失值或未知策略必须在准备资产前拒绝。云端提交前用 `--dry-run --os win --arch x64 --publish never` 核对最终命令，回归覆盖禁止发布的参数转发、默认行为及非法策略；不能只确认工作流 YAML 能解析。
 
-当前源码中 IDE 等未提交改动必须作为一致快照进入构建分支，不能只提交性能 helper 而漏掉其依赖。日志、本地用户数据和 `.local/` 不进入源码快照；使用临时 Git index 时不改动用户现有暂存区，临时 index 在提交完成后清理。安装包从该次 run 的 `zcode-ce-windows` artifact 获取；它包含安装包、差分文件、更新清单及 `build-result.json`。
+云端构建必须使用已完整提交并推送的源码快照，核对 run 的 `head_sha` 与该次提交一致；IDE 等改动与其依赖一并进入构建分支。日志、本地用户数据和 `.local/` 不进入源码快照；使用临时 Git index 时不改动用户现有暂存区，临时 index 在提交完成后清理。安装包从该次 run 的 `zcode-ce-windows` artifact 获取；它包含安装包、差分文件、更新清单及 `build-result.json`。
+
+Windows 原生搜索工具的 ZIP 解压由 `scripts/prebuilt-binary-extract.mjs` 负责：在临时空目录调用 Windows PowerShell 自带的 .NET `ZipFile.ExtractToDirectory` 双参数接口，不依赖 `Expand-Archive` 的模块自动发现。runner 从 PowerShell 7 继承的 `PSModulePath` 可能让 Windows PowerShell 加载不兼容的 Archive 模块，必须保持此环境下仍能解压。PowerShell 设置终止式错误处理，损坏归档或解压失败必须立即以非零状态上抛，不能等到下游才报缺少二进制。解压后的目标校验、复制及临时目录清理由既有调用链持有。验收包含污染模块路径、带空格/单引号的路径、损坏 ZIP 拒绝，以及 `prepare-native-search-tools` 对实际 Windows 归档的最终二进制校验。
 
 ## 平台构建环境
 
